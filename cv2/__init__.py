@@ -67,7 +67,6 @@ def __collect_extra_submodules(enable_debug_print=False):
 
 def bootstrap():
     import sys
-    print(sys.OpenCV_LOADER)
 
     import copy
     save_sys_path = copy.copy(sys.path)

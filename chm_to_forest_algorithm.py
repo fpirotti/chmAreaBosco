@@ -43,6 +43,7 @@ import numpy as np
 import sys
 import os
 dirname, filename = os.path.split(os.path.abspath(__file__))
+sys.path.append(dirname)
 import cv2 as cv
 class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
     """
@@ -140,6 +141,12 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
+        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT,  context)
+        feedback.setProgressText(temppathfile)
+        minarea = self.parameterAsDouble(parameters, self.MIN_AREA,  context)
+        minlargh = self.parameterAsDouble(parameters, self.MIN_LARGH,  context)
+        ksize = math.sqrt(minarea/3.14)
+        minalt = self.parameterAsDouble(parameters, self.ALTEZZA_MIN_ALBERO,  context)
 
         if self.tmpdir == '':
             self.tmpdir = tempfile.TemporaryDirectory()
@@ -147,50 +154,73 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             self.tmpdir.cleanup()
             self.tmpdir = tempfile.TemporaryDirectory()
 
-        chm_temppathfile_copy = os.path.join(self.tmpdir.name, '{}_copy.tif'.format( os.path.basename(source.source()).split('.')[0] ))
 
-        shutil.copyfile(source.source(), chm_temppathfile_copy)
-        rlayer = QgsRasterLayer(chm_temppathfile_copy, 'temp', 'gdal')
+        params = {
+            'EXTENT': source.extent(),
+            'TARGET_CRS': source.crs(),
+            'PIXEL_SIZE': 1.0,
+            'NUMBER': 0,
+            'OUTPUT_TYPE': 1,
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.setProgressText("creo il raster")
+        r = processing.run('qgis:createconstantrasterlayer', params)['OUTPUT']
+
+        feedback.setProgressText("creo il raster" )
+        rlayer = QgsRasterLayer(r, 'temp', 'gdal')
         provider = rlayer.dataProvider()
+        feedback.setProgressText("creo il raster" )
 
-        feedback.setProgressText(source.source())
-        feedback.setProgressText(chm_temppathfile_copy)
 
-        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT,  context)
-        feedback.setProgressText(temppathfile)
-
-        minarea = self.parameterAsDouble(parameters, self.MIN_AREA,  context)
-        minlargh = self.parameterAsDouble(parameters, self.MIN_LARGH,  context)
-        ksize = math.sqrt(minarea/3.14)
-        minalt = self.parameterAsDouble(parameters, self.ALTEZZA_MIN_ALBERO,  context)
-        # read the image
+        feedback.setProgressText("Leggo il raster" )
         img = cv.imread(source.source(), cv.IMREAD_ANYCOLOR | cv.IMREAD_ANYDEPTH  )
-
-        block = QgsRasterBlock(Qgis.Byte, img.shape[0], img.shape[1])
-
-        f = lambda x: int(x * 255)
-        data = bytearray(np.array(map(f, img)))
-        block.setData(data)
-  
-        provider.setEditable(True)
-        provider.writeBlock(block, 1, 0, 0)
-        provider.setEditable(False)
-
 
         if img is None:
             feedback.reportError( 'Cannot find or read ' + source.source() )
             return {}
+
+        feedback.setProgressText("Creo il raster in output" +
+                                 str(img.shape[0]) +
+                                 ' , ' +
+                                 str(img.shape[1])
+                                 )
+        block = QgsRasterBlock(Qgis.Byte,1400,1000)
+
+
+        # Check for cancelation
+        if feedback.isCanceled():
+            return {}
+
+        feedback.setProgressText("Copio i dati in blocco" )
+        f = lambda x: int(x * 255)
+        npa = np.array(map(f, img))
+        npa = map(f, img)
+
+        data = bytearray(bytes(img))
+       # block.setData(data)
+        block.setData(b'\xaa\xbb\xcc\xdd')
+        # Check for cancelation
+        if feedback.isCanceled():
+            return {}
+
+        feedback.setProgressText("Aggiungo il blocco al raster" )
+        provider.setEditable(True)
+        writeok = provider.writeBlock(block, 1, 0, 0)
+        feedback.setProgressText(str(writeok) + " --------" )
+        print(str(writeok) + " --------" )
+        provider.setEditable(False)
+
+
 
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str,img.shape)) )
+        feedback.setProgressText("Applico soglia di altezza di : " + str(minalt) + ' metri ' )
         # binarize the image
         binr = cv.threshold(img, minalt, 255, cv.THRESH_BINARY  )[1]
-
-        feedback.setProgressText("Applico soglia di altezza di : " + str(minalt) + ' metri ' )
-
 
         # Check for cancelation
         if feedback.isCanceled():
@@ -207,38 +237,33 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
+        feedback.setProgressText("Inverto")
         # invert the image
         invert = cv.bitwise_not(binr)
-
-        # Check for cancelation
         if feedback.isCanceled():
             return {}
 
         # erode the image
+        feedback.setProgressText("Erosione")
         erosion = cv.erode(invert, kernel,
                             iterations=1)
-
-        # Check for cancelation
         if feedback.isCanceled():
             return {}
 
+        feedback.setProgressText("Dilatazione")
         final = cv.dilate(erosion, kernel,
                             iterations=1)
 
-        feedback.setProgressText("temppathfile")
-        feedback.setProgressText(temppathfile)
-        feedback.setProgressText("temppathfile")
+        #img = cv.imwrite(temppathfile, img)
 
-        img = cv.imwrite(temppathfile, img)
-
-
+        feedback.setProgressText(rlayer.source())
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
         # algorithms may return multiple feature sinks, calculated numeric
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
-        return {self.OUTPUT: "sink"}
+        return {self.OUTPUT: r}
 
     def name(self):
         """
