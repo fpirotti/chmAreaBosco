@@ -36,4 +36,4 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     #
     from .chm_to_forest import CHMtoForestPlugin
-    return CHMtoForestPlugin()
+    return CHMtoForestPlugin(iface)

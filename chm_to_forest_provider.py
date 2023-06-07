@@ -33,6 +33,9 @@ __revision__ = '$Format:%H$'
 from qgis.core import QgsProcessingProvider
 from .chm_to_forest_algorithm import CHMtoForestAlgorithm
 
+from qgis.PyQt.QtGui import QIcon
+import inspect
+import os
 
 class CHMtoForestProvider(QgsProcessingProvider):
 
@@ -63,7 +66,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         string should be a unique, short, character only string, eg "qgis" or
         "gdal". This string should not be localised.
         """
-        return 'Operators'
+        return 'CHM to Forest'
 
     def name(self):
         """
@@ -72,14 +75,17 @@ class CHMtoForestProvider(QgsProcessingProvider):
 
         This string should be short (e.g. "Lastools") and localised.
         """
-        return self.tr('Operators')
+        return self.tr('CHM to Forest')
 
     def icon(self):
         """
         Should return a QIcon which is used for your provider inside
         the Processing toolbox.
         """
-        return QgsProcessingProvider.icon(self)
+        cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
+        icon = QIcon(os.path.join(os.path.join(cmd_folder, 'logo.png')))
+        return icon
+        #return QgsProcessingProvider.icon(self)
 
     def longName(self):
         """

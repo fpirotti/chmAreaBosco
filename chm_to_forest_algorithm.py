@@ -42,9 +42,12 @@ import inspect
 import numpy as np
 import sys
 import os
+
 dirname, filename = os.path.split(os.path.abspath(__file__))
 sys.path.append(dirname)
 import cv2 as cv
+
+
 class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -65,6 +68,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
     tmpdir = ''
     OUTPUT = 'OUTPUT'
+    OUTPUT2 = 'OUTPUT2'
     INPUT = 'INPUT'
     PERC_COVER = 'PERC_COVER'
     MIN_AREA = 'MIN_AREA'
@@ -92,7 +96,14 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterRasterDestination(
                 self.OUTPUT,
-                self.tr('Output layer')
+                self.tr('Output layer OPEN')
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                self.OUTPUT2,
+                self.tr('Output layer CLOSE')
             )
         )
 
@@ -100,7 +111,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.ALTEZZA_MIN_ALBERO,
                 self.tr('Soglia altezza albero'),
-                defaultValue = 2.0
+                defaultValue=2.0
             )
         )
 
@@ -108,14 +119,14 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PERC_COVER,
                 self.tr('Copertura percentuale '),
-                defaultValue = 20.0
+                defaultValue=20.0
             )
         )
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.MIN_AREA,
                 self.tr('Area minima'),
-                defaultValue = 2000.0
+                defaultValue=2000.0
             )
         )
 
@@ -123,7 +134,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.MIN_LARGH,
                 self.tr('Larghezza minima'),
-                defaultValue = 20.0
+                defaultValue=20.0
             )
         )
 
@@ -141,129 +152,127 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
-        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT,  context)
-        feedback.setProgressText(temppathfile)
-        minarea = self.parameterAsDouble(parameters, self.MIN_AREA,  context)
-        minlargh = self.parameterAsDouble(parameters, self.MIN_LARGH,  context)
-        ksize = math.sqrt(minarea/3.14)
-        minalt = self.parameterAsDouble(parameters, self.ALTEZZA_MIN_ALBERO,  context)
+        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
+        temppathfile2 = self.parameterAsFileOutput(parameters, self.OUTPUT2, context)
+        minarea = self.parameterAsDouble(parameters, self.MIN_AREA, context)
+        minlargh = self.parameterAsDouble(parameters, self.MIN_LARGH, context)
+        ksize = math.sqrt(minarea / 3.14)
+        minalt = self.parameterAsDouble(parameters, self.ALTEZZA_MIN_ALBERO, context)
 
-        if self.tmpdir == '':
-            self.tmpdir = tempfile.TemporaryDirectory()
+        feedback.setProgressText("Preparo il raster in output")
+        pipe = QgsRasterPipe()
+        sdp = source.dataProvider()
+        pipe.set(sdp.clone())
+
+        rasterWriter = QgsRasterFileWriter(temppathfile)
+        error = rasterWriter.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
+
+        if error == QgsRasterFileWriter.NoError:
+            print("Output preparato con successo!")
         else:
-            self.tmpdir.cleanup()
-            self.tmpdir = tempfile.TemporaryDirectory()
+            feedback.reportError('Non sono riuscito ad implementare il raster nuovo OPENING - ' + str(temppathfile))
+            return {}
+
+        rasterWriter2 = QgsRasterFileWriter(temppathfile2)
+        error2 = rasterWriter2.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
+
+        if error2 == QgsRasterFileWriter.NoError:
+            print("Output preparato con successo!")
+        else:
+            feedback.reportError('Non sono riuscito ad implementare il raster nuovo CLOSING  - ' + str(temppathfile))
+            return {}
+
+        tempRasterLayer = QgsRasterLayer(temppathfile)
+        provider = tempRasterLayer.dataProvider()
+
+        tempRasterLayer2 = QgsRasterLayer(temppathfile2)
+        provider2 = tempRasterLayer2.dataProvider()
+
+        feedback.setProgressText("Creo il raster temporaneo " + provider.name() + " di tipo " +
+                                 str(source.dataProvider().bandScale(0)) + " -- - " + str(
+            provider.xSize()) + " x " + str(provider.ySize()))
+
+        if provider is None:
+            feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
+            return {}
+
+        if provider2 is None:
+            feedback.reportError('Cannot find or read ' + tempRasterLayer2.source())
+            return {}
 
 
-        params = {
-            'EXTENT': source.extent(),
-            'TARGET_CRS': source.crs(),
-            'PIXEL_SIZE': 1.0,
-            'NUMBER': 0,
-            'OUTPUT_TYPE': 1,
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.setProgressText("creo il raster")
-        r = processing.run('qgis:createconstantrasterlayer', params)['OUTPUT']
-
-        feedback.setProgressText("creo il raster" )
-        rlayer = QgsRasterLayer(r, 'temp', 'gdal')
-        provider = rlayer.dataProvider()
-        feedback.setProgressText("creo il raster" )
-
-
-        feedback.setProgressText("Leggo il raster" )
-        img = cv.imread(source.source(), cv.IMREAD_ANYCOLOR | cv.IMREAD_ANYDEPTH  )
+        feedback.setProgressText("Leggo il raster")
+        img = cv.imread(source.source(), cv.IMREAD_LOAD_GDAL | cv.IMREAD_ANYDEPTH)
 
         if img is None:
-            feedback.reportError( 'Cannot find or read ' + source.source() )
+            feedback.reportError('Errore nella lettura con opencv ' + source.source())
             return {}
 
-        feedback.setProgressText("Creo il raster in output" +
-                                 str(img.shape[0]) +
-                                 ' , ' +
-                                 str(img.shape[1])
-                                 )
-        block = QgsRasterBlock(Qgis.Byte,1400,1000)
+        block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
+        block2 = provider2.block(1, provider2.extent(), provider2.xSize(), provider2.ySize())
 
+        # Check for cancelation
+        if feedback.isCanceled():
+            return {}
+        feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
+        feedback.setProgressText("Applico soglia di altezza di : " + str(minalt) + ' metri ')
+        # binarize the image
+        binr = cv.threshold(img, minalt, 255, cv.THRESH_BINARY)[1]
 
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Copio i dati in blocco" )
-        f = lambda x: int(x * 255)
-        npa = np.array(map(f, img))
-        npa = map(f, img)
+        feedback.setProgressText("Creo un kernel di : " + str(round(ksize, 3)) +
+                                 '(' + str(int(ksize)) +
+                                 ') metri  e larghezza minima ' + str(minlargh))
 
-        data = bytearray(bytes(img))
-       # block.setData(data)
-        block.setData(b'\xaa\xbb\xcc\xdd')
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(ksize), int(ksize)))
+        closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Aggiungo il blocco al raster" )
+        opening = cv.morphologyEx(binr, cv.MORPH_OPEN, kernel)
+        # Check for cancelation
+        if feedback.isCanceled():
+            return {}
+
+        data = bytearray(bytes(opening))
+        data2 = bytearray(bytes(closing))
+        block.setData(data)
+        block2.setData(data2)
+
         provider.setEditable(True)
-        writeok = provider.writeBlock(block, 1, 0, 0)
-        feedback.setProgressText(str(writeok) + " --------" )
-        print(str(writeok) + " --------" )
+        writeok = provider.writeBlock(block, 1)
         provider.setEditable(False)
 
+        provider2.setEditable(True)
+        writeok2 = provider2.writeBlock(block2, 1)
+        provider2.setEditable(False)
 
-
-        # Check for cancelation
-        if feedback.isCanceled():
+        if writeok:
+            feedback.setProgressText("Successo nella scrittura del dato")
+        else:
+            feedback.setProgressText("Non sono riuscito a scrivere il blocco raster")
             return {}
 
-        feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str,img.shape)) )
-        feedback.setProgressText("Applico soglia di altezza di : " + str(minalt) + ' metri ' )
-        # binarize the image
-        binr = cv.threshold(img, minalt, 255, cv.THRESH_BINARY  )[1]
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta opening")
+        out_rlayer2 = QgsRasterLayer(temppathfile2, "Area Foresta closing")
+        QgsProject.instance().addMapLayer(out_rlayer)
+        QgsProject.instance().addMapLayer(out_rlayer2)
+        self.iface.mapCanvas().refresh()
+        qgis_process
+        run
 
-        # Check for cancelation
-        if feedback.isCanceled():
-            return {}
-
-        # define the kernel
-
-        feedback.setProgressText("Creo un kernel di : " + str(round(ksize,3) ) +
-                                 '(' + str(int(ksize)) +
-                                 ') metri  e larghezza minima ' + str(minlargh) )
-        kernel = np.ones((int(ksize), int(ksize)), np.uint8)
-
-        # Check for cancelation
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Inverto")
-        # invert the image
-        invert = cv.bitwise_not(binr)
-        if feedback.isCanceled():
-            return {}
-
-        # erode the image
-        feedback.setProgressText("Erosione")
-        erosion = cv.erode(invert, kernel,
-                            iterations=1)
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Dilatazione")
-        final = cv.dilate(erosion, kernel,
-                            iterations=1)
-
-        #img = cv.imwrite(temppathfile, img)
-
-        feedback.setProgressText(rlayer.source())
+        feedback.setProgressText(tempRasterLayer.source())
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
         # algorithms may return multiple feature sinks, calculated numeric
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
-        return {self.OUTPUT: r}
+        return {self.OUTPUT: temppathfile}
 
     def name(self):
         """
