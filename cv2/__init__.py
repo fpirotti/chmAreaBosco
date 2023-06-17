@@ -20,7 +20,7 @@ except ImportError:
 # is_x64 = sys.maxsize > 2**32
 
 
-def __load_extra_py_code_for_module(base, name, enable_debug_print=True):
+def __load_extra_py_code_for_module(base, name, enable_debug_print=False):
     module_name = "{}.{}".format(__name__, name)
     export_module_name = "{}.{}".format(base, name)
     native_module = sys.modules.pop(module_name, None)
@@ -71,18 +71,18 @@ def bootstrap():
     import copy
     save_sys_path = copy.copy(sys.path)
 
-    #if hasattr(sys, 'OpenCV_LOADER'):
-    #    print(sys.path)
-    #    raise ImportError('ERROR: recursion is detected during loading of "cv2" binary extensions. Check OpenCV installation.')
+    if hasattr(sys, 'OpenCV_LOADER'):
+        print(sys.path)
+        raise ImportError('ERROR: recursion is detected during loading of "cv2" binary extensions. Check OpenCV installation.')
     sys.OpenCV_LOADER = True
 
-    DEBUG = True
+    DEBUG = False
     if hasattr(sys, 'OpenCV_LOADER_DEBUG'):
         DEBUG = True
 
     import platform
-    if DEBUG: print('\n---------------------OpenCV loader: os.name="{}"  platform.system()="{}"'.format(os.name, str(platform.system())))
-    print("\n1111\n")
+    if DEBUG: print('OpenCV loader: os.name="{}"  platform.system()="{}"'.format(os.name, str(platform.system())))
+
     LOADER_DIR = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
 
     PYTHON_EXTENSIONS_PATHS = []

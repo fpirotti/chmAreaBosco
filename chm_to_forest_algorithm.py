@@ -32,16 +32,20 @@ __revision__ = '$Format:%H$'
 
 import math
 import shutil
-import tempfile
-
-from qgis import processing
-from qgis.PyQt.QtGui import QIcon
+#import tempfile
+from qgis.PyQt.Qt import *
+from qgis.PyQt.QtGui import *
 from qgis.core import *
 from qgis.utils import *
 import inspect
-import numpy as np
 import sys
 import os
+#from qgis.PyQt.QtCore import QCoreApplication
+from qgis.core import (QgsProcessing,
+                       QgsFeatureSink,
+                       QgsProcessingAlgorithm,
+                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterFileDestination)
 
 dirname, filename = os.path.split(os.path.abspath(__file__))
 sys.path.append(dirname)
@@ -68,12 +72,11 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
     tmpdir = ''
     OUTPUT = 'OUTPUT'
-    OUTPUT2 = 'OUTPUT2'
     INPUT = 'INPUT'
-    PERC_COVER = 'PERC_COVER'
-    MIN_AREA = 'MIN_AREA'
-    MIN_LARGH = 'MIN_LARGH'
-    ALTEZZA_MIN_ALBERO = 'ALTEZZA_MIN_ALBERO'
+    # PERC_COVER = 'PERC_COVER'
+    # MIN_AREA = 'MIN_AREA'
+    # MIN_LARGH = 'MIN_LARGH'
+    # ALTEZZA_MIN_ALBERO = 'ALTEZZA_MIN_ALBERO'
 
     def initAlgorithm(self, config):
         """
@@ -99,65 +102,115 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 self.tr('Output layer OPEN')
             )
         )
-
         self.addParameter(
-            QgsProcessingParameterRasterDestination(
-                self.OUTPUT2,
-                self.tr('Output layer CLOSE')
-            )
-        )
+            QgsProcessingParameterFeatureSink('keypoints', 'Keypoints',
+                                                  type=QgsProcessing.TypeVectorPoint,
+                                              createByDefault=True, defaultValue=None))
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.ALTEZZA_MIN_ALBERO,
-                self.tr('Soglia altezza albero'),
+                'altezza_alberochioma_m',
+                self.tr('Soglia altezza chioma (m)'),
                 defaultValue=2.0
             )
         )
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.PERC_COVER,
-                self.tr('Copertura percentuale '),
+                'densit_minima_percentuale',
+                self.tr('Densità copertura (%)'),
+                type=QgsProcessingParameterNumber.Double,
                 defaultValue=20.0
             )
         )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.MIN_AREA,
-                self.tr('Area minima'),
+                'area_minima_m2',
+                self.tr('Area minima (m2)'),
+                type=QgsProcessingParameterNumber.Double,
                 defaultValue=2000.0
             )
         )
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.MIN_LARGH,
+                'larghezza_minima_m',
                 self.tr('Larghezza minima'),
+                type=QgsProcessingParameterNumber.Double,
                 defaultValue=20.0
             )
         )
 
-    def icon(self):
-        cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
-        icon = QIcon(os.path.join(os.path.join(cmd_folder, 'logo.png')))
-        return icon
+    #def icon(self):
+        #cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
+        #icon = QIcon(os.path.join(os.path.join(cmd_folder, 'logo.png')))
+        #return icon
+
+    def local2src(self, x, y, dataProvider, verbose=False ):
+        x1 = 0
+        y1 = 0
+        if isinstance(dataProvider, QgsRasterDataProvider):
+            ext = QgsRectangle(dataProvider.extent())
+            x1 = ext.xMinimum() + (x * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize()))
+            y1 = ext.yMinimum() + (y * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
+            if verbose:
+                print( str(x) + ' - ' + str(x1)   )
+
+        return x1, y1
+
+    def _create_points(self, kp1, sdp):
+        """Create points for testing"""
+
+        point_layer = QgsVectorLayer('Point?crs=EPSG:4326', 'keypoints', 'memory')
+
+        point_provider = point_layer.dataProvider()
+        point_provider.addAttributes([QgsField('X', QVariant.Double)])
+        point_provider.addAttributes([QgsField('Y', QVariant.Double)])
+        #x_index = point_provider.fieldNameIndex('X')
+        #y_index = point_provider.fieldNameIndex('Y')
+        point_provider.addAttributes([QgsField('sizeX', QVariant.Double)])
+        point_provider.addAttributes([QgsField('angle', QVariant.Double)])
+        point_provider.addAttributes([QgsField('response', QVariant.Double)])
+        point_provider.addAttributes([QgsField('octave', QVariant.Int)])
+        #s_index = point_provider.fieldNameIndex('size')
+        #a_index = point_provider.fieldNameIndex('angle')
+        #r_index = point_provider.fieldNameIndex('response')
+        #o_index = point_provider.fieldNameIndex('octave')
+
+        caps = point_layer.dataProvider().capabilities()
+        if caps & QgsVectorDataProvider.AddFeatures:
+            point_layer.startEditing()
+            for i, kp in enumerate(kp1):
+                feat = QgsFeature(point_layer.fields())
+                x, y = self.local2src(kp.pt[0], kp.pt[1], sdp, True)
+                feat.setAttributes([x, y, kp.size, kp.angle, kp.response, kp.octave])
+
+                geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
+                feat.setGeometry(geom)
+                _ = point_layer.dataProvider().addFeatures([feat])
+            point_layer.commitChanges()
+
+        else:
+            print("Error")
+            return {}
+
+        return point_layer
 
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
         """
+        feedback = QgsProcessingMultiStepFeedback(11, feedback)
+        results = {}
+        outputs = {}
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
         temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-        temppathfile2 = self.parameterAsFileOutput(parameters, self.OUTPUT2, context)
-        minarea = self.parameterAsDouble(parameters, self.MIN_AREA, context)
-        minlargh = self.parameterAsDouble(parameters, self.MIN_LARGH, context)
-        ksize = math.sqrt(minarea / 3.14)
-        minalt = self.parameterAsDouble(parameters, self.ALTEZZA_MIN_ALBERO, context)
+        outputKeyPoints = self.parameterAsVectorLayer(parameters, "keypoints", context)
+
+
+        ksize = parameters['larghezza_minima_m']/source.rasterUnitsPerPixelX()
+        ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
 
         feedback.setProgressText("Preparo il raster in output")
         pipe = QgsRasterPipe()
@@ -173,83 +226,64 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('Non sono riuscito ad implementare il raster nuovo OPENING - ' + str(temppathfile))
             return {}
 
-        rasterWriter2 = QgsRasterFileWriter(temppathfile2)
-        error2 = rasterWriter2.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
-
-        if error2 == QgsRasterFileWriter.NoError:
-            print("Output preparato con successo!")
-        else:
-            feedback.reportError('Non sono riuscito ad implementare il raster nuovo CLOSING  - ' + str(temppathfile))
-            return {}
-
+        feedback.setProgressText("Creo il raster temporaneo " + temppathfile+ " di tipo " +  str(source.dataProvider().bandScale(0)))
         tempRasterLayer = QgsRasterLayer(temppathfile)
         provider = tempRasterLayer.dataProvider()
-
-        tempRasterLayer2 = QgsRasterLayer(temppathfile2)
-        provider2 = tempRasterLayer2.dataProvider()
-
-        feedback.setProgressText("Creo il raster temporaneo " + provider.name() + " di tipo " +
-                                 str(source.dataProvider().bandScale(0)) + " -- - " + str(
-            provider.xSize()) + " x " + str(provider.ySize()))
+        feedback.setProgressText("Creato il raster temporaneo " + provider.name() + " di tipo " +  str(source.dataProvider().bandScale(0)) + " -- - " + str( provider.xSize()) + " x " + str(provider.ySize()))
 
         if provider is None:
             feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
             return {}
 
-        if provider2 is None:
-            feedback.reportError('Cannot find or read ' + tempRasterLayer2.source())
-            return {}
-
-
         feedback.setProgressText("Leggo il raster")
-        img = cv.imread(source.source(), cv.IMREAD_LOAD_GDAL | cv.IMREAD_ANYDEPTH)
+        img = cv.imread(source.source(), cv.IMREAD_GRAYSCALE)
 
         if img is None:
             feedback.reportError('Errore nella lettura con opencv ' + source.source())
             return {}
 
+        feedback.setProgressText("SURFo il raster")
+
+        feedback.reportError(str(img.shape))
+        orb = cv.ORB_create()
+        kp1, des1 = orb.detectAndCompute(img, None)
+        point_layer = self._create_points(kp1, sdp)
         block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
-        block2 = provider2.block(1, provider2.extent(), provider2.xSize(), provider2.ySize())
 
         # Check for cancelation
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        feedback.setProgressText("Applico soglia di altezza di : " + str(minalt) + ' metri ')
+        feedback.setProgressText("Applico soglia di altezza di : " + str(parameters['altezza_alberochioma_m']) + ' metri ')
         # binarize the image
-        binr = cv.threshold(img, minalt, 255, cv.THRESH_BINARY)[1]
+        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
 
+        binr = (binr - 1) * -1
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
         feedback.setProgressText("Creo un kernel di : " + str(round(ksize, 3)) +
                                  '(' + str(int(ksize)) +
-                                 ') metri  e larghezza minima ' + str(minlargh))
+                                 ') metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
 
         kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(ksize), int(ksize)))
-        closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
         # Check for cancelation
         if feedback.isCanceled():
             return {}
-
-        opening = cv.morphologyEx(binr, cv.MORPH_OPEN, kernel)
+        #close = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
+        #opening = cv.morphologyEx(close, cv.MORPH_OPEN, kernel)
+        opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
         data = bytearray(bytes(opening))
-        data2 = bytearray(bytes(closing))
         block.setData(data)
-        block2.setData(data2)
 
         provider.setEditable(True)
         writeok = provider.writeBlock(block, 1)
         provider.setEditable(False)
-
-        provider2.setEditable(True)
-        writeok2 = provider2.writeBlock(block2, 1)
-        provider2.setEditable(False)
 
         if writeok:
             feedback.setProgressText("Successo nella scrittura del dato")
@@ -257,23 +291,23 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgressText("Non sono riuscito a scrivere il blocco raster")
             return {}
 
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta opening")
-        out_rlayer2 = QgsRasterLayer(temppathfile2, "Area Foresta closing")
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta morphed k="+str(int(ksize)) )
         QgsProject.instance().addMapLayer(out_rlayer)
-        QgsProject.instance().addMapLayer(out_rlayer2)
-        self.iface.mapCanvas().refresh()
-        qgis_process
-        run
+        QgsProject.instance().addMapLayer(point_layer)
+        #self.iface.mapCanvas().refresh()
 
         feedback.setProgressText(tempRasterLayer.source())
+
+
+
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
         # algorithms may return multiple feature sinks, calculated numeric
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
-        return {self.OUTPUT: temppathfile}
-
+        #return {self.OUTPUT: temppathfile}
+        return results
     def name(self):
         """
         Returns the algorithm name, used for identifying the algorithm. This
