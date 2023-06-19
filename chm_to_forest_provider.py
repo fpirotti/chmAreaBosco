@@ -66,7 +66,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         string should be a unique, short, character only string, eg "qgis" or
         "gdal". This string should not be localised.
         """
-        return 'CHM to Forest'
+        return 'Reg. Veneto Servizio Foreste'
 
     def name(self):
         """
@@ -75,7 +75,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
 
         This string should be short (e.g. "Lastools") and localised.
         """
-        return self.tr('CHM to Forest')
+        return self.tr('Reg. Veneto Servizio Foreste')
 
     def icon(self):
         """

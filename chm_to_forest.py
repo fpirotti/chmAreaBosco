@@ -63,14 +63,14 @@ class CHMtoForestPlugin(object):
         icon = os.path.join(os.path.join(cmd_folder, 'logo.png'))
         self.action = QAction(
              QIcon(icon),
-             u"CHM => Forest", self.iface.mainWindow())
+             u"CHM => Bosco", self.iface.mainWindow())
         self.action.triggered.connect(self.run)
-        self.iface.addPluginToMenu(u"&CHM to Forest", self.action)
+        self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action)
         self.iface.addToolBarIcon(self.action)
 
     def unload(self):
         QgsApplication.processingRegistry().removeProvider(self.provider)
-        self.iface.removePluginMenu(u"&CHM to Forest", self.action)
+        self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action)
         self.iface.removeToolBarIcon(self.action)
     def run(self):
-        processing.execAlgorithmDialog("CHM to Forest:CHM => Forest")
+        processing.execAlgorithmDialog("Reg. Veneto Servizio Foreste:CHM => Bosco")

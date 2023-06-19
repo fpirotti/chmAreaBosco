@@ -152,7 +152,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if isinstance(dataProvider, QgsRasterDataProvider):
             ext = QgsRectangle(dataProvider.extent())
             x1 = ext.xMinimum() + (x * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize()))
-            y1 = ext.yMinimum() + (y * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
+            y1 = ext.yMaximum() - (y * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
             if verbose:
                 print( str(x) + ' - ' + str(x1)   )
 
@@ -182,7 +182,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             point_layer.startEditing()
             for i, kp in enumerate(kp1):
                 feat = QgsFeature(point_layer.fields())
-                x, y = self.local2src(kp.pt[0], kp.pt[1], sdp, True)
+                x, y = self.local2src(kp.pt[0], kp.pt[1], sdp)
                 feat.setAttributes([x, y, kp.size, kp.angle, kp.response, kp.octave])
 
                 geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
@@ -215,6 +215,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Preparo il raster in output")
         pipe = QgsRasterPipe()
         sdp = source.dataProvider()
+
         pipe.set(sdp.clone())
 
         rasterWriter = QgsRasterFileWriter(temppathfile)
@@ -236,7 +237,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         feedback.setProgressText("Leggo il raster")
-        img = cv.imread(source.source(), cv.IMREAD_GRAYSCALE)
+        img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
 
         if img is None:
             feedback.reportError('Errore nella lettura con opencv ' + source.source())
@@ -245,20 +246,22 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("SURFo il raster")
 
         feedback.reportError(str(img.shape))
-        orb = cv.ORB_create()
-        kp1, des1 = orb.detectAndCompute(img, None)
-        point_layer = self._create_points(kp1, sdp)
+        #orb = cv.ORB_create()
+        #kp1, des1 = orb.detectAndCompute(img, None)
+        #point_layer = self._create_points(kp1, sdp)
+        #QgsProject.instance().addMapLayer(point_layer)
         block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
 
         # Check for cancelation
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        feedback.setProgressText("Applico soglia di altezza di : " + str(parameters['altezza_alberochioma_m']) + ' metri ')
+        feedback.setProgressText("Applico soglia di altezza di : " +
+                                 str(parameters['altezza_alberochioma_m']) + ' metri ')
         # binarize the image
-        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
+        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 255, cv.THRESH_BINARY)[1]
 
-        binr = (binr - 1) * -1
+        #binr = (binr - 1) * -1
         # Check for cancelation
         if feedback.isCanceled():
             return {}
@@ -271,29 +274,30 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # Check for cancelation
         if feedback.isCanceled():
             return {}
-        #close = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
-        #opening = cv.morphologyEx(close, cv.MORPH_OPEN, kernel)
-        opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
+        closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
+        opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
+        #opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
         # Check for cancelation
         if feedback.isCanceled():
             return {}
 
+        provider.setEditable(True)
         data = bytearray(bytes(opening))
         block.setData(data)
-
-        provider.setEditable(True)
         writeok = provider.writeBlock(block, 1)
-        provider.setEditable(False)
-
         if writeok:
             feedback.setProgressText("Successo nella scrittura del dato")
         else:
             feedback.setProgressText("Non sono riuscito a scrivere il blocco raster")
             return {}
 
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta morphed k="+str(int(ksize)) )
+        provider.setEditable(False)
+
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta hTrees="+
+                                    str(parameters['altezza_alberochioma_m']) +
+                                    " k="+str(int(ksize)) )
+
         QgsProject.instance().addMapLayer(out_rlayer)
-        QgsProject.instance().addMapLayer(point_layer)
         #self.iface.mapCanvas().refresh()
 
         feedback.setProgressText(tempRasterLayer.source())
@@ -316,7 +320,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'CHM => Forest'
+        return 'CHM => Bosco'
 
     def displayName(self):
         """
