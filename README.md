@@ -1,4 +1,5 @@
 # Da CHM a Area Bosco
+![alt text](logo.png)
 
 Il plugin CHM => Bosco 
 
