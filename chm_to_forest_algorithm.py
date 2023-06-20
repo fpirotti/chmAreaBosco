@@ -73,6 +73,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
     tmpdir = ''
     OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
+    INPUT_SIBOSCO = 'INPUT_SIBOSCO'
+    INPUT_NOBOSCO = 'INPUT_NOBOSCO'
     # PERC_COVER = 'PERC_COVER'
     # MIN_AREA = 'MIN_AREA'
     # MIN_LARGH = 'MIN_LARGH'
@@ -93,6 +95,19 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.INPUT_SIBOSCO,
+                self.tr('Input Maschera Pixel Bosco')
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.INPUT_NOBOSCO,
+                self.tr('Input Maschera Pixel No-Bosco')
+            )
+        )
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
@@ -102,6 +117,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 self.tr('Output layer OPEN')
             )
         )
+
         self.addParameter(
             QgsProcessingParameterFeatureSink('keypoints', 'Keypoints',
                                                   type=QgsProcessing.TypeVectorPoint,
@@ -205,6 +221,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         outputs = {}
 
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
+        sourceNoBosco = self.parameterAsRasterLayer(parameters, self.INPUT_NOBOSCO, context)
+        sourceSiBosco = self.parameterAsRasterLayer(parameters, self.INPUT_SIBOSCO, context)
         temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         outputKeyPoints = self.parameterAsVectorLayer(parameters, "keypoints", context)
 
@@ -238,6 +256,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         feedback.setProgressText("Leggo il raster")
         img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+        imgSiBosco = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+        imgNoBosco = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
 
         if img is None:
             feedback.reportError('Errore nella lettura con opencv ' + source.source())
@@ -261,7 +281,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # binarize the image
         binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 255, cv.THRESH_BINARY)[1]
 
-        #binr = (binr - 1) * -1
         # Check for cancelation
         if feedback.isCanceled():
             return {}
@@ -276,6 +295,12 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             return {}
         closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
         opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
+
+      #  binr = (opening - 255) * -1
+
+        #closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
+       # opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
+
         #opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
         # Check for cancelation
         if feedback.isCanceled():
