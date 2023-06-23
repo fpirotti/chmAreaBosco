@@ -9,7 +9,8 @@ e 1=bosco. Vengono utilizzati diversi parametri per definire
 le caratteristiche del bosco.
 
 Il peso del plugin è circa 110 MB in quanto include la libreria 
-grafica [OpenCV - *Open Source Computer Vision Library*](https://it.wikipedia.org/wiki/OpenCV) (109 MB) che consente  
+grafica [OpenCV - *Open Source Computer Vision Library*](https://it.wikipedia.org/wiki/OpenCV) (109 MB)
+che consente elaborazioni ottimizzate su immagini raster.
 
 ## INPUT
  - Un raster CHM ovvero i modelli delle chiome. 
@@ -45,3 +46,9 @@ valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
 (vedi esempio sotto)
 
 ![Esempio di bosco e non bosco](mask.png)
+
+## Installazione  
+
+Scaricare il file compresso [al link GITHUB](https://github.com/fpirotti/chmAreaBosco/releases)
+
+Andare sul men
