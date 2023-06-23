@@ -21,9 +21,10 @@ dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione di aree da escludere dall'area bosco. 
 - Soglia altezza chioma (m) - l'altezza della chioma minima per definire il pixel
 come appartenente ad un albero.
-- Soglia area minima (m2) - L'area minima per definire un'area a bosco.
-- Densità minima (%) - La proporzione minima coperta da chioma perchè l'area venga inclusa
+- Densità copertura (%) - La proporzione minima coperta da chioma perchè l'area venga inclusa
 come bosco.
+- Area minima (m2) - L'area minima per definire un'area a bosco.
+- Larghezza minima (m) - L'area minima per definire un'area a bosco.
 
 
         * Attenzione - i due raster binari Bosco e Non Bosco devono avere
