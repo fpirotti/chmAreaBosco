@@ -131,8 +131,8 @@
         <stdDevFactor>2</stdDevFactor>
       </minMaxOrigin>
       <colorPalette>
-        <paletteEntry color="#13dede" value="0" label="0" alpha="38"/>
-        <paletteEntry color="#dc1010" value="1" label="1" alpha="255"/>
+        <paletteEntry color="#ff1a01" value="0" label="0" alpha="52"/>
+        <paletteEntry color="#00720a" value="1" label="1" alpha="147"/>
       </colorPalette>
     </rasterrenderer>
     <brightnesscontrast contrast="0" brightness="0" gamma="1"/>

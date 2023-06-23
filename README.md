@@ -1,12 +1,17 @@
 # Da CHM a Area Bosco
 ![alt text](logo.png)
 
+## Descrizione  
+
 Il plugin CHM => Bosco converte un livello raster con il modello delle 
 chiome (CHM - Canopy Height Model) in un raster binario dove 0=non bosco 
 e 1=bosco. Vengono utilizzati diversi parametri per definire 
 le caratteristiche del bosco.
 
-INPUT
+Il peso del plugin è circa 110 MB in quanto include la libreria 
+grafica [OpenCV - *Open Source Computer Vision Library*](https://it.wikipedia.org/wiki/OpenCV) (109 MB) che consente  
+
+## INPUT
  - Un raster CHM ovvero i modelli delle chiome. 
 Questo raster deve necessariamente essere accurato, 
 in quanto fornisce l'informazione di base per la 
