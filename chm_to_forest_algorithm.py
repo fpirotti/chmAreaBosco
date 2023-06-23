@@ -320,9 +320,9 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel )
             if aa < minArea:
-                cv.drawContours(opening, contours, i, 0, -1)
+                cv.drawContours(opening, contours, i, 1, -1)
             else:
-                cv.drawContours(opening, contours, i, 100, -1)
+                cv.drawContours(opening, contours, i, 0, -1)
 
         #closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
        # opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
@@ -358,7 +358,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         provider.setEditable(True)
         data = bytearray(bytes(opening))
         block.setData(data)
-        block.setNoDataValue(.0)
+        block.setNoDataValue(0)
         writeok = provider.writeBlock(block, 1)
         if writeok:
             feedback.setProgressText("Successo nella scrittura del dato")
@@ -371,6 +371,12 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta hTrees="+
                                     str(parameters['altezza_alberochioma_m']) +
                                     " k="+str(int(ksize)) )
+
+        mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
+        if success is False:
+            feedback.setProgressText( mess + " - " + dirname+"/extra/style.qml")
+        else:
+            feedback.setProgressText( mess)
 
         QgsProject.instance().addMapLayer(out_rlayer)
         #self.iface.mapCanvas().refresh()
