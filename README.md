@@ -1,7 +1,10 @@
 # Da CHM a Area Bosco
 ![alt text](logo.png)
 
-Il plugin CHM => Bosco 
+Il plugin CHM => Bosco converte un livello raster con il modello delle 
+chiome (CHM - Canopy Height Model) in un raster binario dove 0=non bosco 
+e 1=bosco. Vengono utilizzati diversi parametri per definire 
+le caratteristiche del bosco.
 
 INPUT
  - Un raster CHM ovvero i modelli delle chiome. 
@@ -16,7 +19,11 @@ nella definizione bosco.
 il valore 1 del pixel di questo raster verrà considerato non bosco a prescindere 
 dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione di aree da escludere dall'area bosco. 
-- Soglia altezza chioma (m) - l'altezza della chioma per definire il pixel appartenente ad un albero.
+- Soglia altezza chioma (m) - l'altezza della chioma minima per definire il pixel
+come appartenente ad un albero.
+- Soglia area minima (m2) - L'area minima per definire un'area a bosco.
+- Densità minima (%) - La proporzione minima coperta da chioma perchè l'area venga inclusa
+come bosco.
 
 
         * Attenzione - i due raster binari Bosco e Non Bosco devono avere
