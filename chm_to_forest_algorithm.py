@@ -32,6 +32,8 @@ __revision__ = '$Format:%H$'
 
 import math
 import shutil
+
+import numpy as np
 #import tempfile
 from qgis.PyQt.Qt import *
 from qgis.PyQt.QtGui import *
@@ -50,8 +52,8 @@ from qgis.core import (QgsProcessing,
 dirname, filename = os.path.split(os.path.abspath(__file__))
 sys.path.append(dirname)
 import cv2 as cv
-
-
+from osgeo import gdal
+import processing
 class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -98,14 +100,16 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterRasterLayer(
                 self.INPUT_SIBOSCO,
-                self.tr('Input Maschera Pixel Bosco')
+                self.tr('Input Maschera Pixel Bosco'),
+                optional=True, defaultValue=None
             )
         )
 
         self.addParameter(
             QgsProcessingParameterRasterLayer(
                 self.INPUT_NOBOSCO,
-                self.tr('Input Maschera Pixel No-Bosco')
+                self.tr('Input Maschera Pixel No-Bosco'),
+                optional=True, defaultValue=None
             )
         )
         # We add a feature sink in which to store our processed features (this
@@ -226,13 +230,20 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         outputKeyPoints = self.parameterAsVectorLayer(parameters, "keypoints", context)
 
-
+        # ret, markers = cv.connectedComponents(sure_fg)
+        # https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html
         ksize = parameters['larghezza_minima_m']/source.rasterUnitsPerPixelX()
+        minArea = parameters['area_minima_m2']
         ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
-
+        areaPixel = source.rasterUnitsPerPixelX()*source.rasterUnitsPerPixelX()
         feedback.setProgressText("Preparo il raster in output")
         pipe = QgsRasterPipe()
         sdp = source.dataProvider()
+        if source.bandCount() != 1:
+            feedback.reportError('Il raster CHM deve avere solamente una banda - il file ' +
+                                 str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
+                                 )
+            return {}
 
         pipe.set(sdp.clone())
 
@@ -248,29 +259,24 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Creo il raster temporaneo " + temppathfile+ " di tipo " +  str(source.dataProvider().bandScale(0)))
         tempRasterLayer = QgsRasterLayer(temppathfile)
         provider = tempRasterLayer.dataProvider()
-        feedback.setProgressText("Creato il raster temporaneo " + provider.name() + " di tipo " +  str(source.dataProvider().bandScale(0)) + " -- - " + str( provider.xSize()) + " x " + str(provider.ySize()))
+        feedback.setProgressText("reato il raster temporaneo " + provider.name() + " di tipo " +  str(source.dataProvider().bandScale(0)) + " -- - " + str( provider.xSize()) + " x " + str(provider.ySize()))
+        block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
 
         if provider is None:
             feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
             return {}
 
         feedback.setProgressText("Leggo il raster")
-        img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
-        imgSiBosco = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
-        imgNoBosco = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
 
+        ds = gdal.Open(str(source.source()))
+        img =  np.array(ds.GetRasterBand(1).ReadAsArray())
+        feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
+        #img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
         if img is None:
-            feedback.reportError('Errore nella lettura con opencv ' + source.source())
+            feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
             return {}
 
-        feedback.setProgressText("SURFo il raster")
-
         feedback.reportError(str(img.shape))
-        #orb = cv.ORB_create()
-        #kp1, des1 = orb.detectAndCompute(img, None)
-        #point_layer = self._create_points(kp1, sdp)
-        #QgsProject.instance().addMapLayer(point_layer)
-        block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
 
         # Check for cancelation
         if feedback.isCanceled():
@@ -279,7 +285,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Applico soglia di altezza di : " +
                                  str(parameters['altezza_alberochioma_m']) + ' metri ')
         # binarize the image
-        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 255, cv.THRESH_BINARY)[1]
+        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
 
         # Check for cancelation
         if feedback.isCanceled():
@@ -293,22 +299,66 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # Check for cancelation
         if feedback.isCanceled():
             return {}
-        closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
-        opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
 
-      #  binr = (opening - 255) * -1
+        feedback.setProgressText("Processo Dilate raster")
+        closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
+        if feedback.isCanceled():
+            return {}
+
+        feedback.setProgressText("Processo Erode  raster")
+        opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
+        if feedback.isCanceled():
+            return {}
+
+        feedback.setProgressText("Processo Invert raster")
+        binr = ((opening - 1) * -1).astype('B')
+
+        #opening = cv.distanceTransform(binr, cv.DIST_L2, 3)
+        feedback.setProgressText("Processo contour raster")
+        contours, _ = cv.findContours(binr, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+        for i in range(len(contours)):
+            aa = int(cv.contourArea(contours[i])*areaPixel )
+            if aa < minArea:
+                cv.drawContours(opening, contours, i, 0, -1)
+            else:
+                cv.drawContours(opening, contours, i, 100, -1)
 
         #closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
        # opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
 
         #opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
         # Check for cancelation
-        if feedback.isCanceled():
-            return {}
 
+
+        if sourceSiBosco is not None:
+            if sourceSiBosco.bandCount() != 1:
+                feedback.reportError('Troppe bande ('+ str(sourceSiBosco.bandCount()) +
+                                     ') nel raster Bosco letto dal file' +
+                                     sourceSiBosco.source())
+                return {}
+            imgSiBosco = cv.imread(sourceSiBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+            if imgSiBosco is None:
+                feedback.reportError('Errore nella lettura con opencv del raster Bosco ' + sourceSiBosco.source())
+                return {}
+            opening = opening * (imgSiBosco != 0)
+        if sourceNoBosco is not None:
+            if sourceNoBosco.bandCount() != 1:
+                feedback.reportError('Troppe bande ('+
+                                     str(sourceNoBosco.bandCount())+') nel raster No-Bosco letto dal file' + sourceNoBosco.source())
+                return {}
+            imgNoBosco = cv.imread( sourceNoBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+            if imgNoBosco is None:
+                feedback.reportError('Errore nella lettura con opencv del raster No-Bosco ' + sourceNoBosco.source())
+                return {}
+
+            opening = opening * (imgNoBosco == 0)
+
+        #opening[opening == 0] = np.NaN
         provider.setEditable(True)
         data = bytearray(bytes(opening))
         block.setData(data)
+        block.setNoDataValue(.0)
         writeok = provider.writeBlock(block, 1)
         if writeok:
             feedback.setProgressText("Successo nella scrittura del dato")
