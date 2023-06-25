@@ -58,4 +58,4 @@ Andare sul menù QGIS "Plugins"=>"Gestisci ed Installa Plugins" e selezionare
 Premere il pulsante "installa" ed aspettare la fine dell'installazione.
 
 
-![installa plugin](img/install.png)
+![installa plugin](img/install.jpg)
