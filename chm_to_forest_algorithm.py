@@ -370,15 +370,61 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                     CalcolatoreRaster = processing.run('gdal:rastercalculator', alg_params, context=context,
                                                                   feedback=feedback, is_child_algorithm=True)
 
-                    finalCalc = CalcolatoreRaster['OUTPUT']
+                    finalCalc = QgsRasterLayer(CalcolatoreRaster['OUTPUT'])
 
             if sourceNoBosco is not None:
                 if sourceNoBosco.bandCount() != 1:
-                    feedback.reportError('Il raster no-bosco deve avere solamente una banda - il file ' +
+                    feedback.reportError('Il raster bosco deve avere solamente una banda - il file ' +
                                          str(sourceNoBosco.source()) + ' ha ' + str(
-                        sourceNoBosco.bandCount()) + ' bande!'
+                        sourceNoBosco.bandCount()) + ' bande! Procedo senza includere questo raster'
                                          )
-                    return {}
+                else:
+                    if sourceNoBosco.crs() != source.crs():
+                        feedback.setProgressText("CRS SiBosco diverso, " + sourceNoBosco.crs() +
+                                                 " convergo...")
+                        alg_params = {
+                            'DATA_TYPE': 1,  # Byte
+                            'EXTRA': '',
+                            'INPUT': sourceNoBosco,
+                            'MULTITHREADING': True,
+                            'NODATA': None,
+                            'OPTIONS': '',
+                            'RESAMPLING': 0,  # Vicino più Prossimo
+                            'SOURCE_CRS': sourceNoBosco,
+                            'TARGET_CRS': source,
+                            'TARGET_EXTENT': source,
+                            'TARGET_EXTENT_CRS': source,
+                            'TARGET_RESOLUTION': source,
+                            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+                        }
+                        TrasformazioneRiproiezione = processing.run('gdal:warpreproject', alg_params,
+                                                                               context=context, feedback=feedback,
+                                                                                 is_child_algorithm=True)
+                        sourceNoBosco = QgsRasterLayer(TrasformazioneRiproiezione['OUTPUT'])
+
+                    feedback.setProgressText("Integro Raster Si-Bosco ....")
+                    alg_params = {
+                        'BAND_A': 1,
+                        'BAND_B': 1,
+                        'EXTENT_OPT': 3,  # Intersect
+                        'EXTRA': '',
+                        'FORMULA': 'A * (B == 1)',
+                        'INPUT_A': source,
+                        'INPUT_B': sourceNoBosco,
+                        'NO_DATA': 0,
+                        'OPTIONS': '',
+                        'PROJWIN': source,
+                        'RTYPE': 0,  # Byte
+                        'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+                    }
+                    if finalCalc is not None:
+                        alg_params['INPUT_A'] = finalCalc
+
+                    CalcolatoreRaster = processing.run('gdal:rastercalculator', alg_params, context=context,
+                                                                  feedback=feedback, is_child_algorithm=True)
+
+                    temppathfile = CalcolatoreRaster['OUTPUT']
+
 
 
 
@@ -410,7 +456,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         }
         if temppathfile_v:
             feedback.setProgressText(" ")
-            feedback.setProgressText(extra)
             feedback.setProgressText("==========================")
             feedback.setProgressText("Esporto un livello vettoriale....")
 

@@ -67,19 +67,19 @@ class CHMtoForestPlugin(object):
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action)
         self.iface.addToolBarIcon(self.action)
-        self.action2 = QAction(
-             QIcon(icon2),
-             u"CHM => Single Tree Detection", self.iface.mainWindow())
-        self.action2.triggered.connect(self.run2)
-        self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
-        self.iface.addToolBarIcon(self.action2)
+        # self.action2 = QAction(
+        #      QIcon(icon2),
+        #      u"CHM => Single Tree Detection", self.iface.mainWindow())
+        # self.action2.triggered.connect(self.run2)
+        # self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
+        # self.iface.addToolBarIcon(self.action2)
 
     def unload(self):
         QgsApplication.processingRegistry().removeProvider(self.provider)
         self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action)
-        self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
+        #self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
         self.iface.removeToolBarIcon(self.action)
-        self.iface.removeToolBarIcon(self.action2)
+        #self.iface.removeToolBarIcon(self.action2)
     def run(self):
         processing.execAlgorithmDialog("Reg. Veneto Servizio Foreste:CHM => Bosco")
     def run2(self):

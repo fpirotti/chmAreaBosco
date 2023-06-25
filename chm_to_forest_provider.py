@@ -58,7 +58,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         Loads all algorithms belonging to this provider.
         """
         self.addAlgorithm(CHMtoForestAlgorithm())
-        self.addAlgorithm(CHMtoTreesAlgorithm())
+        #self.addAlgorithm(CHMtoTreesAlgorithm())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 
