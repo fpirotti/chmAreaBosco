@@ -38,13 +38,13 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	chm_to_forest.py 
+	chmAreaBosco.py
 
-PLUGINNAME = chm_to_forest
+PLUGINNAME = chmAreaBosco
 
 PY_FILES = \
 	__init__.py \
-	chm_to_forest.py 
+	chmAreaBosco.py
 
 UI_FILES = 
 

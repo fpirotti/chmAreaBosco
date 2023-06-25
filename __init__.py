@@ -35,5 +35,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .chm_to_forest import CHMtoForestPlugin
+    from .chmAreaBosco import CHMtoForestPlugin
     return CHMtoForestPlugin(iface)

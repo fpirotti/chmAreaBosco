@@ -3,7 +3,7 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=chm_to_forest
+name=chmAreaBosco
 qgisMinimumVersion=3.0
 description=Converts a CHM to a vector layer with forest polygons according to various parameters defined by the user that reflect different definitions of forest
 version=0.1

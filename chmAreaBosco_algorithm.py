@@ -181,17 +181,24 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         temppathfile_v = self.parameterAsFileOutput(parameters, self.OUTPUT_V, context)
 
         # ret, markers = cv.connectedComponents(sure_fg)
+
         # https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html
         ksize  = parameters['larghezza_minima_m']
         ksizePixels = ksize/source.rasterUnitsPerPixelX()
         minArea = parameters['area_minima_m2']
         ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
-        ksizeGapsPixels = math.sqrt(parameters['area_minima_m2'] / 3.14)/source.rasterUnitsPerPixelX()
-        areaPixel = source.rasterUnitsPerPixelX()*source.rasterUnitsPerPixelX()
+        # minDensit = parameters['densit_minima_percentuale'])
+        ksizeGapsPixels = ksizeGaps / source.rasterUnitsPerPixelX()
+        areaPixel = source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX()
 
         feedback.setProgressText("Lato pixel... " + str(source.rasterUnitsPerPixelX()))
         feedback.setProgressText("CRS... " + str(source.crs()))
         feedback.setProgressText("NBande... " + str(source.bandCount()))
+        feedback.setProgressText("ksize da larghezza  (m)" + str(ksize))
+        feedback.setProgressText("ksize da areaMin Gaps  (m)" + str(ksizeGaps))
+        feedback.setProgressText("ksize da larghezza  (pixels)" + str(ksizePixels))
+        feedback.setProgressText("ksize da areaMin Gaps  (pixels)" + str(ksizeGapsPixels))
+
         # pipe = QgsRasterPipe()
         # sdp = source.dataProvider()
         if source.bandCount() != 1:
@@ -199,7 +206,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
                                  )
             return {}
-
 
         translate_options = gdal.TranslateOptions(format='GTiff', outputType=gdal.GDT_Byte)
 
@@ -251,10 +257,14 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Creo un kernel di : " + str(round(ksizePixels, 2)) +
-                                 '(' + str(int(ksizePixels)) +
-                                 ') metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(ksizePixels), int(ksizePixels)))
+        kSizeFinalPixels = ksizeGapsPixels
+        if kSizeFinalPixels < ksizePixels:
+            kSizeFinalPixels = ksizePixels
+
+        feedback.setProgressText("Creo un kernel di lato: " + str(round(kSizeFinalPixels, 2)) +
+                                 ' metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
+
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(kSizeFinalPixels), int(kSizeFinalPixels)))
         if feedback.isCanceled():
             return {}
 
@@ -429,9 +439,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
 
         feedback.setProgressText(temppathfile)
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta hTrees="+
-                                    str(parameters['altezza_alberochioma_m']) +
-                                    " k(m)="+str(int(ksize)) )
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco")
 
         mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
         if success is False:
@@ -464,7 +472,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
             temppathfile_vector = outputsp['OUTPUT']
             feedback.setProgressText(outputsp['OUTPUT'])
-            out_vlayer = QgsVectorLayer(temppathfile_vector, "Area Foresta" )
+            out_vlayer = QgsVectorLayer(temppathfile_vector, "Area Bosco" )
 
             mess, success = out_vlayer.loadNamedStyle(dirname + "/extra/stylev.qml")
             if success is False:

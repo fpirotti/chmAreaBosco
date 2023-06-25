@@ -31,8 +31,8 @@ __copyright__ = '(C) 2023 by Francesco Pirotti - CIRGEO/TESAF University of Pado
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .chm_to_forest_algorithm import CHMtoForestAlgorithm
-from .chm_to_trees_algorithm import CHMtoTreesAlgorithm
+from .chmAreaBosco_algorithm import CHMtoForestAlgorithm
+from .chmAreaBosco_trees_algorithm import CHMtoTreesAlgorithm
 
 from qgis.PyQt.QtGui import QIcon
 import inspect

@@ -35,7 +35,7 @@ import sys
 import inspect
 
 from qgis.core import QgsProcessingAlgorithm, QgsApplication
-from .chm_to_forest_provider import CHMtoForestProvider
+from .chmAreaBosco_provider import CHMtoForestProvider
 from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon
 import processing

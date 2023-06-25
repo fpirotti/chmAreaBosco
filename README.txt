@@ -1,7 +1,7 @@
 Plugin Builder Results
 
 Your plugin CHMtoForest was created in:
-    C:/Users/Pirotti/odrive/Google Drive/dev/qgisCHM2forest\chm_to_forest
+    C:/Users/Pirotti/odrive/Google Drive/dev/qgisCHM2forest\chmAreaBosco
 
 Your QGIS plugin directory is located at:
     C:/Users/Pirotti/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins
@@ -15,7 +15,7 @@ What's Next:
 
   * Test the plugin by enabling it in the QGIS plugin manager
 
-  * Customize it by editing the implementation file: ``chm_to_forest.py``
+  * Customize it by editing the implementation file: ``chmAreaBosco.py``
 
   * You can use the Makefile to compile your Ui and resource files when
     you make changes. This requires GNU make (gmake)
