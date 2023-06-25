@@ -6,14 +6,14 @@
 name=chmAreaBosco
 qgisMinimumVersion=3.0
 description=Converts a CHM to a vector layer with forest polygons according to various parameters defined by the user that reflect different definitions of forest
-version=0.1
+version=1.1.0
 author=Francesco Pirotti - CIRGEO/TESAF University of Padova
 email=francesco.pirotti@unipd.it
 
 about=Converts a CHM to a vector layer with forest polygons according to various definitions, e.g. from FAO or user-defined.
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/cirgeo/chmAreaBosco/issues
+repository=https://github.com/cirgeo/chmAreaBosco
 # End of mandatory metadata
 
 # Recommended items:
@@ -25,7 +25,7 @@ hasProcessingProvider=yes
 # Tags are comma separated with spaces allowed
 tags=processing, polygon, mask
 
-homepage=http://www.cirgeo.unipd.it
+homepage=https://github.com/cirgeo/chmAreaBosco
 category=Analysis
 icon=logo.png
 # experimental flag
