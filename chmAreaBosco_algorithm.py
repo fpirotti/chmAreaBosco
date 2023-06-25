@@ -370,6 +370,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                                                                  is_child_algorithm=True)
                         sourceSiBosco = QgsRasterLayer(TrasformazioneRiproiezione['OUTPUT'])
 
+                        if feedback.isCanceled():
+                            return {}
                     feedback.setProgressText("Integro Raster Si-Bosco ....")
                     alg_params = {
                         'BAND_A': 1,
@@ -388,6 +390,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                     CalcolatoreRaster = processing.run('gdal:rastercalculator', alg_params, context=context,
                                                                   feedback=feedback, is_child_algorithm=True)
 
+                    if feedback.isCanceled():
+                        return {}
                     finalCalc = QgsRasterLayer(CalcolatoreRaster['OUTPUT'])
 
             if sourceNoBosco is not None:
@@ -415,11 +419,15 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                             'TARGET_RESOLUTION': source,
                             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
                         }
+                        if feedback.isCanceled():
+                            return {}
                         TrasformazioneRiproiezione = processing.run('gdal:warpreproject', alg_params,
                                                                                context=context, feedback=feedback,
                                                                                  is_child_algorithm=True)
                         sourceNoBosco = QgsRasterLayer(TrasformazioneRiproiezione['OUTPUT'])
 
+                        if feedback.isCanceled():
+                            return {}
                     feedback.setProgressText("Integro Raster Si-Bosco ....")
                     alg_params = {
                         'BAND_A': 1,
@@ -443,8 +451,9 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
                     temppathfile = CalcolatoreRaster['OUTPUT']
 
-
-
+                    feedback.setProgressText("")
+                    if feedback.isCanceled():
+                        return {}
 
         feedback.setProgressText(temppathfile)
         out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco")
@@ -468,7 +477,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             'INTERVAL': 1,
             'NODATA': 0,
             'OFFSET': 0,
-            'OUTPUT': temppathfile_v
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
         if temppathfile_v:
             feedback.setProgressText(" ")
@@ -477,8 +486,49 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
             outputsp =  processing.run('gdal:contour_polygon', alg_params, context=context, feedback=feedback,
                            is_child_algorithm=True)
+            alg_params = {
+                'INPUT': outputsp['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
 
-            temppathfile_vector = outputsp['OUTPUT']
+            feedback.setProgressText("")
+            if feedback.isCanceled():
+                return {}
+
+            feedback.setProgressText("Divido i poligoni....")
+            DaMultiParteAPartiSingole = processing.run('native:multiparttosingleparts', alg_params,
+                                                                  context=context, feedback=feedback,
+                                                                  is_child_algorithm=True)
+            alg_params = {
+                'COLUMN': ['fid'],
+                'INPUT': DaMultiParteAPartiSingole['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+            if feedback.isCanceled():
+                return {}
+
+            feedback.setProgressText("Eliminao il fid....")
+            EliminaCampo = processing.run('native:deletecolumn', alg_params, context=context,
+                                                     feedback=feedback, is_child_algorithm=True)
+
+            alg_params = {
+                'FIELD_LENGTH': 12,
+                'FIELD_NAME': 'area_ha',
+                'FIELD_PRECISION': 3,
+                'FIELD_TYPE': 0,  # Decimale (doppia precisione)
+                'FORMULA': '$area/10000',
+                'INPUT': EliminaCampo['OUTPUT'],
+                'OUTPUT': temppathfile_v
+            }
+            if feedback.isCanceled():
+                return {}
+
+            feedback.setProgressText("Aggiungo campo area....")
+            CalcolatoreDiCampi = processing.run('native:fieldcalculator', alg_params, context=context,
+                                                           feedback=feedback, is_child_algorithm=True)
+
+
+            temppathfile_vector = CalcolatoreDiCampi['OUTPUT']
             feedback.setProgressText(outputsp['OUTPUT'])
             out_vlayer = QgsVectorLayer(temppathfile_vector, "Area Bosco" )
 
