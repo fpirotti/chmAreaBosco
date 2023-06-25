@@ -45,7 +45,7 @@ come bosco.
 valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
 (vedi esempio sotto)
 
-![Esempio di bosco e non bosco](mask.png)
+![Esempio di bosco e non bosco](img/mask.png)
 
 ## Installazione  
 

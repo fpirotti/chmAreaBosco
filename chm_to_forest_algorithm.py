@@ -199,19 +199,9 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
                                  )
             return {}
-        if sourceNoBosco and sourceNoBosco.bandCount() != 1:
-            feedback.reportError('Il raster no-bosco deve avere solamente una banda - il file ' +
-                                 str(sourceNoBosco.source()) + ' ha ' + str(sourceNoBosco.bandCount()) + ' bande!'
-                                 )
-            return {}
-        if sourceSiBosco and sourceSiBosco.bandCount() != 1:
-            feedback.reportError('Il raster bosco deve avere solamente una banda - il file ' +
-                                 str(sourceSiBosco.source()) + ' ha ' + str(sourceSiBosco.bandCount()) + ' bande!'
-                                 )
-            return {}
 
-        translate_options = gdal.TranslateOptions(format='GTiff',
-                                                  outputType=gdal.GDT_Byte)
+
+        translate_options = gdal.TranslateOptions(format='GTiff', outputType=gdal.GDT_Byte)
 
         try:
            gdal.Translate(srcDS=str(source.source()),
@@ -226,7 +216,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         provider = tempRasterLayer.dataProvider()
         feedback.setProgressText("Creato il raster temporaneo " + provider.name() +
                                  " di tipo " +  str(provider.bandScale(0)) +
-                                 " -- - " + str( provider.xSize()) +
+                                 " - dimensione pixel: " + str( provider.xSize()) +
                                  " x " + str(provider.ySize()))
         block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
 
@@ -236,7 +226,13 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         feedback.setProgressText("Leggo il raster")
 
-        ds = gdal.Open(str(source.source()))
+        try:
+            ds = gdal.Open(str(source.source()))
+        except:
+            feedback.reportError('Non sono riuscito a leggere il raster CHM ' +
+                                 gdal.GetLastErrorMsg() )
+            return {}
+
         img = np.array(ds.GetRasterBand(1).ReadAsArray())
         feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
         #img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
@@ -271,15 +267,10 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         opening =  cv.morphologyEx(closing.astype('B'), cv.MORPH_OPEN, kernel)
         if feedback.isCanceled():
             return {}
-        #feedback.setProgressText("Processo Erode  raster")
-        #opening = cv.erode(opening, kernel)
-
-       # final = ((closing - 1) * -1).astype('B')
         final = opening
 
         feedback.setProgressText("Rimuovo piccole aree  bosco...")
         contours, _ = cv.findContours(final.astype('B'), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
         feedback.setProgressText("Trovato " + str(len(contours)) + " aree bosco...")
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel)
@@ -289,72 +280,132 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
+        feedback.setProgressText("Rimuovo piccole aree NON bosco e metto a bosco....")
         finalInv = ((final - 1) * -1).astype('B')
         if feedback.isCanceled():
             return {}
-        feedback.setProgressText("Rimuovo piccole aree NON bosco e metto a bosco....")
         contours, _ = cv.findContours(finalInv, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         feedback.setProgressText("Trovato " + str(len(contours)) + " aree NON bosco...")
+        if feedback.isCanceled():
+            return {}
 
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel )
             if aa < minArea:
                 cv.drawContours(final, contours, i, 1, -1)
 
-        if sourceSiBosco is not None:
-            if sourceSiBosco.bandCount() != 1:
-                feedback.reportError('Troppe bande ('+ str(sourceSiBosco.bandCount()) +
-                                     ') nel raster Bosco letto dal file' +
-                                     sourceSiBosco.source())
-                return {}
-
-            dsSiBosco = gdal.Open(str(sourceSiBosco.source()))
-            imgSiBosco = np.array(dsSiBosco.GetRasterBand(1).ReadAsArray())
-            if imgSiBosco is None:
-                feedback.reportError('Errore nella lettura con opencv del raster Bosco ' + sourceSiBosco.source())
-                return {}
-            opening = opening * (imgSiBosco != 0)
-        if sourceNoBosco is not None:
-            if sourceNoBosco.bandCount() != 1:
-                feedback.reportError('Troppe bande ('+
-                                     str(sourceNoBosco.bandCount())+') nel raster No-Bosco letto dal file' + sourceNoBosco.source())
-                return {}
-            imgNoBosco = cv.imread( sourceNoBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
-            if imgNoBosco is None:
-                feedback.reportError('Errore nella lettura con opencv del raster No-Bosco ' + sourceNoBosco.source())
-                return {}
-
-            opening = opening * (imgNoBosco == 0)
-
-        #opening[opening == 0] = np.NaN
+        feedback.setProgressText("Scrivo i dati....")
         provider.setEditable(True)
         data = bytearray(bytes(final.astype('B')))
-
+        if feedback.isCanceled():
+            return {}
         block.setData(data)
-       # block.setNoDataValue(0)
+        if feedback.isCanceled():
+            return {}
         writeok = provider.writeBlock(block, 1)
+        if feedback.isCanceled():
+            return {}
         if writeok:
             feedback.setProgressText("Successo nella scrittura del dato")
         else:
             feedback.reportError("Non sono riuscito a scrivere il blocco raster")
             return {}
-
         provider.setEditable(False)
+        if feedback.isCanceled():
+            return {}
+
+        ### MASCHERA CON ESISTENTI ####
+        if sourceSiBosco is not None or sourceNoBosco is not None:
+            parameters = {'INPUT_A': tempRasterLayer,
+                          'BAND_A': 1,
+                          'FORMULA': 'A',
+                          # your expression here. Mine finds all cells with value > 100. Experiment in the GUI if needed. You can copy and paste exactly the same expression to into your code here
+                          'OUTPUT': temppathfile}
+            finalCalc = None
+            if sourceSiBosco is not None:
+                if sourceSiBosco.bandCount() != 1:
+                    feedback.reportError('Il raster bosco deve avere solamente una banda - il file ' +
+                                         str(sourceSiBosco.source()) + ' ha ' + str(
+                        sourceSiBosco.bandCount()) + ' bande! Procedo senza includere questo raster'
+                                         )
+                else:
+                    if sourceSiBosco.crs() != source.crs():
+                        feedback.setProgressText("CRS SiBosco diverso, " + sourceSiBosco.crs() +
+                                                 " convergo...")
+                        alg_params = {
+                            'DATA_TYPE': 1,  # Byte
+                            'EXTRA': '',
+                            'INPUT': sourceSiBosco,
+                            'MULTITHREADING': True,
+                            'NODATA': None,
+                            'OPTIONS': '',
+                            'RESAMPLING': 0,  # Vicino più Prossimo
+                            'SOURCE_CRS': sourceSiBosco,
+                            'TARGET_CRS': source,
+                            'TARGET_EXTENT': source,
+                            'TARGET_EXTENT_CRS': source,
+                            'TARGET_RESOLUTION': source,
+                            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+                        }
+                        TrasformazioneRiproiezione = processing.run('gdal:warpreproject', alg_params,
+                                                                               context=context, feedback=feedback,
+                                                                                 is_child_algorithm=True)
+                        sourceSiBosco = QgsRasterLayer(TrasformazioneRiproiezione['OUTPUT'])
+
+                    feedback.setProgressText("Integro Raster Si-Bosco ....")
+                    alg_params = {
+                        'BAND_A': 1,
+                        'BAND_B': 1,
+                        'EXTENT_OPT': 3,  # Intersect
+                        'EXTRA': '',
+                        'FORMULA': 'A * (B == 1)',
+                        'INPUT_A': source,
+                        'INPUT_B': sourceSiBosco,
+                        'NO_DATA': 0,
+                        'OPTIONS': '',
+                        'PROJWIN': source,
+                        'RTYPE': 0,  # Byte
+                        'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+                    }
+                    CalcolatoreRaster = processing.run('gdal:rastercalculator', alg_params, context=context,
+                                                                  feedback=feedback, is_child_algorithm=True)
+
+                    finalCalc = CalcolatoreRaster['OUTPUT']
+
+            if sourceNoBosco is not None:
+                if sourceNoBosco.bandCount() != 1:
+                    feedback.reportError('Il raster no-bosco deve avere solamente una banda - il file ' +
+                                         str(sourceNoBosco.source()) + ' ha ' + str(
+                        sourceNoBosco.bandCount()) + ' bande!'
+                                         )
+                    return {}
+
+
 
         feedback.setProgressText(temppathfile)
         out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta hTrees="+
                                     str(parameters['altezza_alberochioma_m']) +
                                     " k(m)="+str(int(ksize)) )
 
-
+        mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
+        if success is False:
+            feedback.reportError( mess + " - " + dirname+"/extra/style.qml")
+        else:
+            feedback.setProgressText(mess)
+        QgsProject.instance().addMapLayer(out_rlayer)
         # Poligonizzazione (da raster a vettore)
-        extra =  '-mask ' + temppathfile
+
         alg_params = {
             'BAND': 1,
-            'EIGHT_CONNECTEDNESS': True,
-            'FIELD': 'Area',
-            'EXTRA': extra,
+            'CREATE_3D': False,
+            'EXTRA': '',
+            'FIELD_NAME_MAX': '',
+            'FIELD_NAME_MIN': '',
+            'IGNORE_NODATA': False,
             'INPUT': out_rlayer,
+            'INTERVAL': 1,
+            'NODATA': 0,
+            'OFFSET': 0,
             'OUTPUT': temppathfile_v
         }
         if temppathfile_v:
@@ -363,8 +414,9 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgressText("==========================")
             feedback.setProgressText("Esporto un livello vettoriale....")
 
-            outputsp = processing.run('gdal:polygonize', alg_params, context=context,
-                                      feedback=feedback, is_child_algorithm=False)
+            outputsp =  processing.run('gdal:contour_polygon', alg_params, context=context, feedback=feedback,
+                           is_child_algorithm=True)
+
             temppathfile_vector = outputsp['OUTPUT']
             feedback.setProgressText(outputsp['OUTPUT'])
             out_vlayer = QgsVectorLayer(temppathfile_vector, "Area Foresta" )
@@ -376,13 +428,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 feedback.setProgressText(mess)
             QgsProject.instance().addMapLayer(out_vlayer)
 
-        mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
-        if success is False:
-            feedback.reportError( mess + " - " + dirname+"/extra/style.qml")
-        else:
-            feedback.setProgressText(mess)
 
-        QgsProject.instance().addMapLayer(out_rlayer)
         #QgsProject.instance().addMapLayer(outputsp['OUTPUT'])
         #self.iface.mapCanvas().refresh()
 
