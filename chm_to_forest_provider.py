@@ -32,6 +32,7 @@ __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
 from .chm_to_forest_algorithm import CHMtoForestAlgorithm
+from .chm_to_trees_algorithm import CHMtoTreesAlgorithm
 
 from qgis.PyQt.QtGui import QIcon
 import inspect
@@ -57,6 +58,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         Loads all algorithms belonging to this provider.
         """
         self.addAlgorithm(CHMtoForestAlgorithm())
+        self.addAlgorithm(CHMtoTreesAlgorithm())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 
@@ -85,7 +87,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
         icon = QIcon(os.path.join(os.path.join(cmd_folder, 'logo.png')))
         return icon
-        #return QgsProcessingProvider.icon(self)
+       # return QgsProcessingProvider.icon(self)
 
     def longName(self):
         """
