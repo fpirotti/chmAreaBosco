@@ -186,10 +186,18 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         ksize  = parameters['larghezza_minima_m']
         ksizePixels = ksize/source.rasterUnitsPerPixelX()
         minArea = parameters['area_minima_m2']
+        minAreaPixels = parameters['area_minima_m2'] / (source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX())
         ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
         # minDensit = parameters['densit_minima_percentuale'])
         ksizeGapsPixels = ksizeGaps / source.rasterUnitsPerPixelX()
         areaPixel = source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX()
+
+        if source.rasterUnitsPerPixelX() < 0.01:
+            feedback.reportError('La risoluzione del raster è troppo bassa, il CHM deve avere risoluzione '
+                                 ' minima di 1 cm, questo raster ha risoluzione di  ' +
+                                 str(round(source.rasterUnitsPerPixelX(),3))
+                                 )
+            return {}
 
         feedback.setProgressText("Lato pixel... " + str(source.rasterUnitsPerPixelX()))
         feedback.setProgressText("CRS... " + str(source.crs()))
@@ -284,7 +292,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Trovato " + str(len(contours)) + " aree bosco...")
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel)
-            if aa < minArea:
+            if aa < minAreaPixels:
                 cv.drawContours(final, contours, i, 0, -1)
 
         if feedback.isCanceled():
@@ -301,7 +309,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel )
-            if aa < minArea:
+            if aa < minAreaPixels:
                 cv.drawContours(final, contours, i, 1, -1)
 
         feedback.setProgressText("Scrivo i dati....")
