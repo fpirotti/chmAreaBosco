@@ -50,7 +50,7 @@ valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
 ## Installazione  
 
 Scaricare il file compresso "chmAreaBosco-xxxx.zip" dell'ultima versione
-[al link GITHUB](https://github.com/fpirotti/chmAreaBosco/releases) dove 
+[al link GITHUB](https://github.com/cirgeo/chmAreaBosco/releases) dove 
 xxx indica il sistema operativo
 
 Andare sul menù QGIS "Plugins"=>"Gestisci ed Installa Plugins" e selezionare 
