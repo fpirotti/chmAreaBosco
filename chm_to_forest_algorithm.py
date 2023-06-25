@@ -191,6 +191,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         feedback.setProgressText("Lato pixel... " + str(source.rasterUnitsPerPixelX()))
         feedback.setProgressText("CRS... " + str(source.crs()))
+        feedback.setProgressText("NBande... " + str(source.bandCount()))
         # pipe = QgsRasterPipe()
         # sdp = source.dataProvider()
         if source.bandCount() != 1:
@@ -198,11 +199,16 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
                                  )
             return {}
-
-        #pipe.set(sdp.clone())
-
-        #rasterWriter = QgsRasterFileWriter(temppathfile)
-        #error = rasterWriter.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
+        if sourceNoBosco and sourceNoBosco.bandCount() != 1:
+            feedback.reportError('Il raster no-bosco deve avere solamente una banda - il file ' +
+                                 str(sourceNoBosco.source()) + ' ha ' + str(sourceNoBosco.bandCount()) + ' bande!'
+                                 )
+            return {}
+        if sourceSiBosco and sourceSiBosco.bandCount() != 1:
+            feedback.reportError('Il raster bosco deve avere solamente una banda - il file ' +
+                                 str(sourceSiBosco.source()) + ' ha ' + str(sourceSiBosco.bandCount()) + ' bande!'
+                                 )
+            return {}
 
         translate_options = gdal.TranslateOptions(format='GTiff',
                                                   outputType=gdal.GDT_Byte)
@@ -215,12 +221,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('Non sono riuscito ad implementare il raster in uscita - ' +
                                  gdal.GetLastErrorMsg() )
             return {}
-
-        # if error == QgsRasterFileWriter.NoError:
-        #     print("Output preparato con successo!")
-        # else:
-        #     feedback.reportError('Non sono riuscito ad implementare il raster nuovo OPENING - ' + str(temppathfile))
-        #     return {}
 
         tempRasterLayer = QgsRasterLayer(temppathfile)
         provider = tempRasterLayer.dataProvider()
@@ -252,59 +252,23 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  str(parameters['altezza_alberochioma_m']) + ' metri ')
         # binarize the image
         binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
-
-        # Check for cancelation
         if feedback.isCanceled():
             return {}
 
         feedback.setProgressText("Creo un kernel di : " + str(round(ksizePixels, 2)) +
                                  '(' + str(int(ksizePixels)) +
                                  ') metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
-
         kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(ksizePixels), int(ksizePixels)))
-        # Check for cancelation
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Processo Invert raster")
-        # binr = ((opening - 1) * -1).astype('B')
         chmBinary = binr
-        chmBinaryInv = ((binr - 1) * -1).astype('B')
-        # nComponents, labeledImage, stats, centroids = cv.connectedComponentsWithStatsWithAlgorithm(binr, 4,  cv.CV_32S, cv.CCL_SPAGHETTI)
-        #
-        # feedback.setProgressText("Trovato n. "+ str(nComponents) +" fragmenti.")
-        # print(stats)
-        # for i in range(nComponents):
-        #     if i != 0:
-        #         continue
-        #     aa = int(stats[i, cv.CC_STAT_AREA]*areaPixel )
-        #     if aa < minArea:
-        #         print(aa)
-        #         print(stats[i, cv.CC_STAT_AREA])
-        #         binr = binr * (labeledImage == i).astype("uint8")
-        #
-        #feedback.setProgressText("Processo Dilate/Open raster con distance: include alberi entro " + str(ksizeGapsPixels) + " di raggio")
-        #distance = cv.distanceTransform(binr, cv.DIST_L2, cv.DIST_MASK_PRECISE)
-        ## convert minimum canopy density to threshold distance to remove isolated trees....
-        #opening = cv.threshold(distance, ksizeGapsPixels/2, 1, cv.THRESH_BINARY)[1]
-        #feedback.setProgressText("Processo Erode/Close raster con distance: include alberi entro " + str(ksizeGapsPixels) + " di raggio")
-        #if feedback.isCanceled():
-        #   return {}
-        #opening = ((opening - 1) * -1).astype('B')
-        #distance2 = cv.distanceTransform(opening, cv.DIST_L2, cv.DIST_MASK_PRECISE )
-        #if feedback.isCanceled():
-        #    return {}
-        #opening2 = cv.threshold(distance2, ksizeGapsPixels/2, 1, cv.THRESH_BINARY)[1]
-        #if feedback.isCanceled():
-        #    return {}
-        # opening2 = ((opening2 - 1) * -1).astype(np.byte)
-        #opening = opening2 * opening
         feedback.setProgressText("Processo CLOSING  raster")
         closing = cv.morphologyEx(chmBinary, cv.MORPH_CLOSE, kernel)
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Processo OPENING  raster")
-        opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
+        opening =  cv.morphologyEx(closing.astype('B'), cv.MORPH_OPEN, kernel)
         if feedback.isCanceled():
             return {}
         #feedback.setProgressText("Processo Erode  raster")
@@ -316,28 +280,26 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText("Rimuovo piccole aree  bosco...")
         contours, _ = cv.findContours(final.astype('B'), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
-        feedback.setProgressText("Trovato " + len(contours) + " aree bosco...")
+        feedback.setProgressText("Trovato " + str(len(contours)) + " aree bosco...")
         for i in range(len(contours)):
             aa = int(cv.contourArea(contours[i])*areaPixel)
             if aa < minArea:
                 cv.drawContours(final, contours, i, 0, -1)
-            else:
-                cv.drawContours(final, contours, i, 1, -1)
 
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Rimuovo piccole aree bosco")
-        contours, _ = cv.findContours(final.astype('B'), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        print(len(contours))
-        for i in range(len(contours)):
-            continue
-            aa = int(cv.contourArea(contours[i])*areaPixel )
+        finalInv = ((final - 1) * -1).astype('B')
+        if feedback.isCanceled():
+            return {}
+        feedback.setProgressText("Rimuovo piccole aree NON bosco e metto a bosco....")
+        contours, _ = cv.findContours(finalInv, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        feedback.setProgressText("Trovato " + str(len(contours)) + " aree NON bosco...")
 
+        for i in range(len(contours)):
+            aa = int(cv.contourArea(contours[i])*areaPixel )
             if aa < minArea:
                 cv.drawContours(final, contours, i, 1, -1)
-            else:
-                cv.drawContours(final, contours, i, 0, -1)
 
         if sourceSiBosco is not None:
             if sourceSiBosco.bandCount() != 1:
@@ -345,7 +307,9 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                      ') nel raster Bosco letto dal file' +
                                      sourceSiBosco.source())
                 return {}
-            imgSiBosco = cv.imread(sourceSiBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+
+            dsSiBosco = gdal.Open(str(sourceSiBosco.source()))
+            imgSiBosco = np.array(dsSiBosco.GetRasterBand(1).ReadAsArray())
             if imgSiBosco is None:
                 feedback.reportError('Errore nella lettura con opencv del raster Bosco ' + sourceSiBosco.source())
                 return {}
