@@ -74,9 +74,9 @@ Premere il pulsante "installa" ed aspettare la fine dell'installazione.
 ## Benchmark
 
 Three CHM rasters with the following size have been tested. All CHMs 
-have 0.5 m resolution - time for processing using a normal laptop with 8 MB RAM 
-and a i7 processor 3 GHz is reported.
-is reported  
+have 0.5 m resolution - time for processing using a normal laptop with 16 MB RAM 
+and a 12th Gen Intel(R) Core(TM) i7 1.10 GHz
+  
 - X: 3845 Y: 2838 - (50 MB)  -  4 secondi (v1.1.0) - 2 secondi  (v1.2.0)
 - X: 4506 Y: 5770 - (180 MB) - 13 secondi (v1.1.0) - 5 secondi  (v1.2.0)
 - X: 27413 Y: 19240 (4.6 GB)-  25 minuti  (v1.1.0) - 7 minuti  (v1.2.0)
