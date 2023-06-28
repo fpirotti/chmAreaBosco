@@ -175,7 +175,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 'larghezza_minima_m',
-                self.tr('Larghezza minima'),
+                self.tr('Larghezza minima (m)'),
                 type=QgsProcessingParameterNumber.Double,
                 defaultValue=20.0
             )
