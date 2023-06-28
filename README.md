@@ -92,4 +92,14 @@ is reported
 - X: 4506 Y: 5770 - (180 MB) - 13 secondi
 - X: 27413 Y: 19240 (4.6 GB)-
 
-NB 
+NB - la velocità dipende molto dalla complessità della struttura 
+orizzontale del CHM ovvero dal rapporto spazi senza chiome e spazi con chiome.
+A parità di dimensione del raster CHM, un'area completamente coperta da chiome o 
+completamente scoperta da vegetazione avrà tempi di elaborazione molto più veloci 
+rispetto ad un'area con una struttura più a "scacchiera" ovvero alternanza di aree con 
+e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sulle parti interne.
+
+
+## Esempio
+
+Scaricare il file chm.tif che trovate [QUI](extra/chm.tif)
