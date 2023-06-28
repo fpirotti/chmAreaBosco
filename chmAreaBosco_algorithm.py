@@ -79,6 +79,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
     INPUT_SIBOSCO = 'INPUT_SIBOSCO'
     INPUT_NOBOSCO = 'INPUT_NOBOSCO'
+    FAST = 'FAST_IMPL'
     # PERC_COVER = 'PERC_COVER'
     # MIN_AREA = 'MIN_AREA'
     # MIN_LARGH = 'MIN_LARGH'
@@ -104,6 +105,14 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_SIBOSCO,
                 self.tr('Input Maschera Pixel Bosco'),
                 optional=True, defaultValue=None
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.FAST,
+                self.tr('Implementazione veloce (meno accurato)'),
+                defaultValue=True
             )
         )
 
@@ -166,11 +175,15 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+    def setProgressText(self, feedback, stringin):
+        print(stringin)
+        feedback.setProgressText(stringin)
+        
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
         """
-        feedback = QgsProcessingMultiStepFeedback(11, feedback)
+        #feedback = QgsProcessingMultiStepFeedback(11, feedback)
         results = {}
         outputs = {}
         start = datetime.now()
@@ -179,16 +192,17 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         sourceSiBosco = self.parameterAsRasterLayer(parameters, self.INPUT_SIBOSCO, context)
         temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         temppathfile_v = self.parameterAsFileOutput(parameters, self.OUTPUT_V, context)
+        fastImplementation = self.parameterAsBoolean(parameters, self.FAST, context)
 
         # ret, markers = cv.connectedComponents(sure_fg)
 
         # https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html
         ksize  = parameters['larghezza_minima_m']
-        ksizePixels = ksize/source.rasterUnitsPerPixelX()
+        ksizePixels = ksize / source.rasterUnitsPerPixelX()
         minArea = parameters['area_minima_m2']
         minAreaPixels = parameters['area_minima_m2'] / (source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX())
         ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
-        # minDensit = parameters['densit_minima_percentuale'])
+        minDensit = parameters['densit_minima_percentuale']
         ksizeGapsPixels = ksizeGaps / source.rasterUnitsPerPixelX()
         areaPixel = source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX()
 
@@ -199,13 +213,15 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  )
             return {}
 
-        feedback.setProgressText("Lato pixel... " + str(source.rasterUnitsPerPixelX()))
-        feedback.setProgressText("CRS... " + str(source.crs()))
-        feedback.setProgressText("NBande... " + str(source.bandCount()))
-        feedback.setProgressText("ksize da larghezza  (m)" + str(ksize))
-        feedback.setProgressText("ksize da areaMin Gaps  (m)" + str(ksizeGaps))
-        feedback.setProgressText("ksize da larghezza  (pixels)" + str(ksizePixels))
-        feedback.setProgressText("ksize da areaMin Gaps  (pixels)" + str(ksizeGapsPixels))
+        self.setProgressText(feedback, "Lato pixel... " + str(source.rasterUnitsPerPixelX()))
+        self.setProgressText(feedback, "CRS... " + str(source.crs()))
+        self.setProgressText(feedback, "NBande... " + str(source.bandCount()))
+        self.setProgressText(feedback, "ksize da larghezza  (m)" + str(ksize))
+        self.setProgressText(feedback, "ksize da areaMin Gaps  (m)" + str(ksizeGaps))
+        self.setProgressText(feedback, "ksize da larghezza  (pixels)" + str(ksizePixels))
+        self.setProgressText(feedback, "ksize da areaMin Gaps  (pixels)" + str(ksizeGapsPixels))
+        self.setProgressText(feedback, "Min area  (m2)" + str(minArea))
+        self.setProgressText(feedback, "Min area  (pixels)" + str(minAreaPixels))
 
         # pipe = QgsRasterPipe()
         # sdp = source.dataProvider()
@@ -228,7 +244,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         tempRasterLayer = QgsRasterLayer(temppathfile)
         provider = tempRasterLayer.dataProvider()
-        feedback.setProgressText("Creato il raster temporaneo " + provider.name() +
+        self.setProgressText(feedback, "Creato il raster temporaneo " + provider.name() +
                                  " di tipo " +  str(provider.bandScale(0)) +
                                  " - dimensione pixel: " + str( provider.xSize()) +
                                  " x " + str(provider.ySize()))
@@ -238,7 +254,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
             return {}
 
-        feedback.setProgressText("Leggo il raster")
+        self.setProgressText(feedback, "Leggo il raster")
 
         try:
             ds = gdal.Open(str(source.source()))
@@ -248,7 +264,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         img = np.array(ds.GetRasterBand(1).ReadAsArray())
-        feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
+        self.setProgressText(feedback, "Letto raster di dimensioni "+ str(img.shape))
         #img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
         if img is None:
             feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
@@ -257,8 +273,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # Check for cancelation
         if feedback.isCanceled():
             return {}
-        feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        feedback.setProgressText("Applico soglia di altezza di : " +
+        self.setProgressText(feedback, "Dimensione immagine: " + ' x '.join(map(str, img.shape)))
+        self.setProgressText(feedback, "Applico soglia di altezza di : " +
                                  str(parameters['altezza_alberochioma_m']) + ' metri ')
         # binarize the image
         binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
@@ -269,7 +285,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if kSizeFinalPixels < ksizePixels:
             kSizeFinalPixels = ksizePixels
 
-        feedback.setProgressText("Creo un kernel di lato: " + str(round(kSizeFinalPixels, 2)) +
+        self.setProgressText(feedback, "Creo un kernel di lato: " + str(round(kSizeFinalPixels, 2)) +
                                  ' metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
 
         kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(kSizeFinalPixels), int(kSizeFinalPixels)))
@@ -277,44 +293,90 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         chmBinary = binr
-        feedback.setProgressText("Processo CLOSING  raster")
-        closing = cv.morphologyEx(chmBinary, cv.MORPH_CLOSE, kernel)
+        chmBinaryInv = ((chmBinary - 1) * -1).astype('B')
+        self.setProgressText(feedback, "Processo CLOSING  raster")
+        if fastImplementation is False:
+            self.setProgressText(feedback, "Processo CLOSING slow raster")
+            closing = cv.morphologyEx(chmBinary, cv.MORPH_CLOSE, kernel)
+        else:
+            self.setProgressText(feedback, "Processo CLOSING fast raster")
+            distance = cv.distanceTransform(chmBinaryInv.astype('B'), cv.DIST_L2, cv.DIST_MASK_PRECISE)
+            closing = cv.threshold(distance, kSizeFinalPixels/2, 1, cv.THRESH_BINARY)[1]
+            closing = cv.erode( ((closing - 1) * -1).astype('B'), kernel)
+
         if feedback.isCanceled():
             return {}
-        feedback.setProgressText("Processo OPENING  raster")
-        opening =  cv.morphologyEx(closing.astype('B'), cv.MORPH_OPEN, kernel)
+        self.setProgressText(feedback, "Processo OPENING  raster")
+        opening = cv.morphologyEx(closing.astype('B'), cv.MORPH_OPEN, kernel)
         if feedback.isCanceled():
             return {}
         final = opening
 
-        feedback.setProgressText("Rimuovo piccole aree  bosco...")
-        contours, _ = cv.findContours(final.astype('B'), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        feedback.setProgressText("Trovato " + str(len(contours)) + " aree bosco...")
-        for i in range(len(contours)):
-            aa = int(cv.contourArea(contours[i])*areaPixel)
-            if aa < minAreaPixels:
-                cv.drawContours(final, contours, i, 0, -1)
+        pts = []
+        self.setProgressText(feedback, "Rimuovo aree piccole bosco...")
+        #contours, _ = cv.findContours(final.astype('B'), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
+        output = cv.connectedComponentsWithStats(final.astype('B'))
+        (numLabels, labels, stats, centroids) = output
+
+        self.setProgressText(feedback, "Trovato " +  str(numLabels) + " aree bosco troppo piccole...")
+
+        #self.setProgressText(feedback, "Scrivo report.txt file su documenti o home folder...")
+        #file1 = open("report.txt", "w")  # append mode
+        #file1.write("Bosco ID: area (m2)\n")
+        #for i in range(len(contours)):
+        for i in range(0, numLabels):
+            #aa = int(cv.contourArea(contours[i])*areaPixel)
+            aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
+            if aa < minArea:
+                #file1.write(str(i+10)+":"+str(aa) + "\n")
+                print(np.nonzero(labels == i))
+                print((np.nonzero(labels == i)))
+                pts = np.nonzero(labels == i).toList()
+                #final[pts] = 0
+            #cv.drawContours(final, contours, i, i+10, -1)
+
+        if len(pts) > 0:
+            final[pts] = 0
+            self.setProgressText(feedback, "Sostituito " +  str(len(pts)) + " pixels aree bosco piccole...")
+
+        pts = []
         if feedback.isCanceled():
             return {}
 
-        feedback.setProgressText("Rimuovo piccole aree NON bosco e metto a bosco....")
+        self.setProgressText(feedback, "Rimuovo piccole aree NON bosco e metto a bosco....")
         finalInv = ((final - 1) * -1).astype('B')
         if feedback.isCanceled():
             return {}
-        contours, _ = cv.findContours(finalInv, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        feedback.setProgressText("Trovato " + str(len(contours)) + " aree NON bosco...")
+        #contours, _ = cv.findContours(finalInv, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+        output = cv.connectedComponentsWithStats(finalInv.astype('B'))
+        (numLabels, labels, stats, centroids) = output
+
+        self.setProgressText(feedback, "Trovato " + str(numLabels) + " aree NON bosco troppo piccole ...")
         if feedback.isCanceled():
             return {}
 
-        for i in range(len(contours)):
-            aa = int(cv.contourArea(contours[i])*areaPixel )
-            if aa < minAreaPixels:
-                cv.drawContours(final, contours, i, 1, -1)
+        #file1.write("NON Bosco ID: area (m2)\n")
+        #for i in range(len(contours)):
 
-        feedback.setProgressText("Scrivo i dati....")
+        for i in range(0, numLabels):
+            #aa = int(cv.contourArea(contours[i])*areaPixel)
+            aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
+            if aa < minArea:
+                #file1.write(str(i+10)+":"+str(aa) + "\n")
+                #pts = np.nonzero(labels == i)
+                pts = pts + (labels == i).toList()
+
+        if len(pts) > 0:
+            final[pts] = 1
+            self.setProgressText(feedback, "Sostituito " +  str(len(pts)) + " pixels aree NON bosco piccole...")
+
+        #file1.close()
+        self.setProgressText(feedback, "Scrivo i dati....")
         provider.setEditable(True)
-        data = bytearray(bytes(final.astype('B')))
+        #distance[ distance > 255 ] = 255
+        data = bytearray(bytes(final.astype('B') ))
         if feedback.isCanceled():
             return {}
         block.setData(data)
@@ -324,7 +386,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         if writeok:
-            feedback.setProgressText("Successo nella scrittura del dato")
+            self.setProgressText(feedback, "Successo nella scrittura del dato")
         else:
             feedback.reportError("Non sono riuscito a scrivere il blocco raster")
             return {}
@@ -348,7 +410,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                          )
                 else:
                     if sourceSiBosco.crs() != source.crs():
-                        feedback.setProgressText("CRS SiBosco diverso, " + sourceSiBosco.crs() +
+                        self.setProgressText(feedback, "CRS SiBosco diverso, " + sourceSiBosco.crs() +
                                                  " convergo...")
                         alg_params = {
                             'DATA_TYPE': 1,  # Byte
@@ -372,7 +434,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
                         if feedback.isCanceled():
                             return {}
-                    feedback.setProgressText("Integro Raster Si-Bosco ....")
+                    self.setProgressText(feedback, "Integro Raster Si-Bosco ....")
                     alg_params = {
                         'BAND_A': 1,
                         'BAND_B': 1,
@@ -402,7 +464,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                          )
                 else:
                     if sourceNoBosco.crs() != source.crs():
-                        feedback.setProgressText("CRS SiBosco diverso, " + sourceNoBosco.crs() +
+                        self.setProgressText(feedback, "CRS SiBosco diverso, " + sourceNoBosco.crs() +
                                                  " convergo...")
                         alg_params = {
                             'DATA_TYPE': 1,  # Byte
@@ -428,7 +490,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
                         if feedback.isCanceled():
                             return {}
-                    feedback.setProgressText("Integro Raster Si-Bosco ....")
+                    self.setProgressText(feedback, "Integro Raster Si-Bosco ....")
                     alg_params = {
                         'BAND_A': 1,
                         'BAND_B': 1,
@@ -451,18 +513,18 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
                     temppathfile = CalcolatoreRaster['OUTPUT']
 
-                    feedback.setProgressText("")
+                    self.setProgressText(feedback, "")
                     if feedback.isCanceled():
                         return {}
 
-        feedback.setProgressText(temppathfile)
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco")
+        self.setProgressText(feedback, temppathfile)
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco Closing ")
 
         mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
         if success is False:
             feedback.reportError( mess + " - " + dirname+"/extra/style.qml")
         else:
-            feedback.setProgressText(mess)
+            self.setProgressText(feedback, mess)
         QgsProject.instance().addMapLayer(out_rlayer)
         # Poligonizzazione (da raster a vettore)
 
@@ -480,22 +542,22 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
         if temppathfile_v:
-            feedback.setProgressText(" ")
-            feedback.setProgressText("==========================")
-            feedback.setProgressText("Esporto un livello vettoriale....")
+            self.setProgressText(feedback, " ")
+            self.setProgressText(feedback, "==========================")
+            self.setProgressText(feedback, "Esporto un livello vettoriale....")
 
-            outputsp =  processing.run('gdal:contour_polygon', alg_params, context=context, feedback=feedback,
+            outputsp = processing.run('gdal:contour_polygon', alg_params, context=context, feedback=feedback,
                            is_child_algorithm=True)
             alg_params = {
                 'INPUT': outputsp['OUTPUT'],
                 'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
             }
 
-            feedback.setProgressText("")
+            self.setProgressText(feedback, "")
             if feedback.isCanceled():
                 return {}
 
-            feedback.setProgressText("Divido i poligoni....")
+            self.setProgressText(feedback, "Divido i poligoni....")
             DaMultiParteAPartiSingole = processing.run('native:multiparttosingleparts', alg_params,
                                                                   context=context, feedback=feedback,
                                                                   is_child_algorithm=True)
@@ -507,7 +569,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 return {}
 
-            feedback.setProgressText("Eliminao il fid....")
+            self.setProgressText(feedback, "Eliminao il fid....")
             EliminaCampo = processing.run('native:deletecolumn', alg_params, context=context,
                                                      feedback=feedback, is_child_algorithm=True)
 
@@ -523,31 +585,29 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 return {}
 
-            feedback.setProgressText("Aggiungo campo area....")
+            self.setProgressText(feedback, "Aggiungo campo area....")
             CalcolatoreDiCampi = processing.run('native:fieldcalculator', alg_params, context=context,
                                                            feedback=feedback, is_child_algorithm=True)
 
 
             temppathfile_vector = CalcolatoreDiCampi['OUTPUT']
-            feedback.setProgressText(outputsp['OUTPUT'])
+            self.setProgressText(feedback, outputsp['OUTPUT'])
             out_vlayer = QgsVectorLayer(temppathfile_vector, "Area Bosco" )
 
             mess, success = out_vlayer.loadNamedStyle(dirname + "/extra/stylev.qml")
             if success is False:
                 feedback.reportError(mess + " - " + dirname + "/extra/stylev.qml")
             else:
-                feedback.setProgressText(mess)
+                self.setProgressText(feedback, mess)
             QgsProject.instance().addMapLayer(out_vlayer)
 
 
         #QgsProject.instance().addMapLayer(outputsp['OUTPUT'])
         #self.iface.mapCanvas().refresh()
 
-        feedback.setProgressText(temppathfile_v )
-
-
+        self.setProgressText(feedback, temppathfile_v)
         stop = datetime.now()
-        feedback.setProgressText("Tempo di elaborazione: " + str(stop-start))
+        self.setProgressText(feedback, "Tempo di elaborazione: " + str(stop-start))
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
         # algorithms may return multiple feature sinks, calculated numeric
