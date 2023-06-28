@@ -190,6 +190,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText(tempRasterLayer.source())
         stop = datetime.now()
         feedback.setProgressText("Tempo di elaborazione: " + str(stop-start))
+        stop = datetime.now()
         return results
     def name(self):
         """

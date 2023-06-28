@@ -140,12 +140,17 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 optional=True,
             )
         )
-        self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_V,
-                                                                  self.tr('Area Bosco Vettoriale'),
-                                                                  type=QgsProcessing.TypeVectorPolygon,
-                                                                  createByDefault=False,
-                                                                  optional=True,
-                                                                  defaultValue=None))
+
+        self.addParameter(
+            QgsProcessingParameterVectorDestination(
+              self.OUTPUT_V,
+              self.tr('Area Bosco Vettoriale'),
+              type=QgsProcessing.TypeVectorPolygon,
+              createByDefault=False,
+              optional=True,
+              defaultValue=None
+            )
+        )
 
         self.addParameter(
             QgsProcessingParameterNumber(
@@ -163,6 +168,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 defaultValue=20.0
             )
         )
+
         self.addParameter(
             QgsProcessingParameterNumber(
                 'area_minima_m2',
@@ -194,6 +200,8 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         results = {}
         outputs = {}
         start = datetime.now()
+        totTime = 0
+
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
         sourceNoBosco = self.parameterAsRasterLayer(parameters, self.INPUT_NOBOSCO, context)
         sourceSiBosco = self.parameterAsRasterLayer(parameters, self.INPUT_SIBOSCO, context)
@@ -321,6 +329,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         stop = datetime.now()
         self.setProgressText(feedback, "Tempo di elaborazione raster: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
         self.setProgressText(feedback, "Rimuovo aree con estensione sotto soglia...", True)
         start = datetime.now()
         pts = None
@@ -329,6 +338,11 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
 
         output = cv.connectedComponentsWithStats(final.astype('B'))
         (numLabels, labels, stats, centroids) = output
+        stop = datetime.now()
+        feedback.setProgressText("Tempo di elaborazione connectedComponents: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
+
 
         self.setProgressText(feedback, "Trovato " +  str(numLabels) + " aree bosco troppo piccole...")
 
@@ -336,22 +350,30 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         #file1 = open("report.txt", "w")  # append mode
         #file1.write("Bosco ID: area (m2)\n")
         #for i in range(len(contours)):
-        indexx = []
-        indexy = []
+
+        ptst = None
         for i in range(0, numLabels):
             #aa = int(cv.contourArea(contours[i])*areaPixel)
             aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
             if aa < minArea:
-                ptst = np.nonzero(labels == i)
-                indexx += list(ptst[0])
-                indexy += list(ptst[1])
+                if ptst is None:
+                    ptst = labels == i
+                else:
+                    ptst = ptst | (labels == i)
 
-        pts = (np.array(indexx, dtype='int64'), np.array(indexy, dtype='int64') )
+        stop = datetime.now()
+        feedback.setProgressText("Tempo di elaborazione collect components: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
 
-        if len(pts[0]) > 0:
-            final[pts] = 0
-            self.setProgressText(feedback, "Sostituito " +  str(len(pts[0])) + " pixels aree bosco piccole...")
+        if ptst is not None:
+            final[ptst] = 0
+            self.setProgressText(feedback, "Sostituito  pixels aree bosco piccole...")
 
+        stop = datetime.now()
+        feedback.setProgressText("Tempo di elaborazione sostituzione components: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
         if feedback.isCanceled():
             return {}
 
@@ -364,31 +386,44 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         output = cv.connectedComponentsWithStats(finalInv.astype('B'))
         (numLabels, labels, stats, centroids) = output
 
+        stop = datetime.now()
+        feedback.setProgressText("Tempo di elaborazione connected components: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
+
         self.setProgressText(feedback, "Trovato " + str(numLabels) + " aree NON bosco troppo piccole ...")
         if feedback.isCanceled():
             return {}
 
         #file1.write("NON Bosco ID: area (m2)\n")
         #for i in range(len(contours)):
-        pts = []
-        indexx = []
-        indexy = []
+        ptst = None
         for i in range(0, numLabels):
             #aa = int(cv.contourArea(contours[i])*areaPixel)
             aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
             if aa < minArea:
-                ptst = np.nonzero(labels == i)
-                indexx += list(ptst[0])
-                indexy += list(ptst[1])
-
-        pts = (np.array(indexx, dtype='int64'), np.array(indexy, dtype='int64') )
-
-        if len(pts[0]) > 0:
-            final[pts] = 1
-            self.setProgressText(feedback, "Sostituito " +  str(len(pts[0])) + " pixels aree NON bosco piccole...")
+                if ptst is None:
+                    ptst = labels == i
+                else:
+                    ptst = ptst | (labels == i)
 
         stop = datetime.now()
-        self.setProgressText(feedback, "Tempo di elaborazione rimozione aree sotto soglia: " + str(stop-start))
+        feedback.setProgressText("Tempo di elaborazione collect components: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
+        #pts = (np.array(indexx, dtype='int64'), np.array(indexy, dtype='int64') )
+
+        if ptst is not None:
+            final[ptst] = 1
+            self.setProgressText(feedback, "Sostituito  pixels aree bosco piccole...")
+
+        stop = datetime.now()
+        feedback.setProgressText("Tempo di elaborazione sostituzione components: " + str(stop-start))
+        totTime += (stop - start).total_seconds()
+        start = datetime.now()
+
+        self.setProgressText(feedback, "Tempo di elaborazione rimozione aree sotto soglia: " +
+                             str(totTime))
 
         self.setProgressText(feedback, "Scrivo i dati di output....", True)
         provider.setEditable(True)

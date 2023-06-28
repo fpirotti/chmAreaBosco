@@ -77,8 +77,8 @@ Three CHM rasters with the following size have been tested. All CHMs
 have 0.5 m resolution - time for processing using a normal laptop with 8 MB RAM 
 and a i7 processor 3 GHz is reported.
 is reported  
-- X: 3845 Y: 2838 - (50 MB)  - 2 secondi
-- X: 4506 Y: 5770 - (180 MB) - 13 secondi
+- X: 3845 Y: 2838 - (50 MB)  -  4 secondi (v1.1.0) - 2 secondi  (v1.2.0)
+- X: 4506 Y: 5770 - (180 MB) - 13 secondi (v1.1.0) - 5 secondi  (v1.2.0)
 - X: 27413 Y: 19240 (4.6 GB)-
 
 NB - la velocità dipende molto dalla complessità della struttura 
