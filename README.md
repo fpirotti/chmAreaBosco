@@ -90,25 +90,25 @@ e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sull
 
 
 ## Esempio
-
-![chm](extra/example/sat.jpg)
+ 
+<img src="extra/example/sat.jpg" width=400 >
 
 Scaricare il file chm.tif che trovate [QUI](extra/example/chm.tif) ed aggiungerlo 
 al progetto QGIS - tematizzatelo come preferite:
-
-![chm](extra/example/chmColor.jpg)
+ 
+<img src="extra/example/chmColor.jpg" width=400 >
 
 Aprite il plugin e selezionate il chm e avviate l'elaborazione.
 Il CHM verrà convertito internamente ad un file binario
-
-![chm](extra/example/chmBinSat.jpg)
+ 
+<img src="extra/example/chmBinSat.jpg" width=400 >
 
 E le aree a bosco identificate e accorpate nel raster in output. La aree 
 con estensione sotto soglia vengono eliminate (Vedi differenza tra l'immagini seguenti 
 sopra e sotto )
 
-<img src="extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg" width=300 >
-<img src="extra/example/risultatoCleanAreePiccoleNoBosco.jpg" width=300 > 
+<img src="extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg" width=400 >
+<img src="extra/example/risultatoCleanAreePiccoleNoBosco.jpg" width=400 > 
 
 Se l'utente vuole esportare anche il file vettoriale con le aree, questo deve esssere espressamente
 definito nel pannello delle impostazioni [vedi sezione ouput](#output)
