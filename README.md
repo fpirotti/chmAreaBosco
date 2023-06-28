@@ -93,8 +93,8 @@ e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sull
  
 <img src="extra/example/sat.jpg" width=400 >
 
-Scaricare il file chm.tif che trovate [QUI](extra/example/chm.tif) ed aggiungerlo 
-al progetto QGIS - tematizzatelo come preferite:
+Scaricare il file chm.tif che trovate [QUI](extra/example/chm.tif) (usate la versione "raw" da Github) 
+ed aggiungerlo al progetto QGIS - tematizzatelo come preferite:
  
 <img src="extra/example/chmColor.jpg" width=400 >
 
