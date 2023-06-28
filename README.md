@@ -6,8 +6,7 @@
 [INPUT](#Metodi) |
 [Installazione](#Installazione) |
 [Benchmark](#benchmark) |
-[Esempio 1](#Esempio_1) |
-[Esempio 2](#Esempio_2)
+[Esempio](#Esempio)  
 
 ## Descrizione  
 
@@ -28,11 +27,11 @@ che consente elaborazioni ottimizzate su immagini raster.
 Questo raster deve necessariamente essere accurato, 
 in quanto fornisce l'informazione di base per la 
 creazione dell'area a bosco.
- - Un raster binario BOSCO* (pixel con valore 1 = pixel bosco) \[OPZIONALE\]: 
+ - Un raster binario BOSCO[*](#mask) (pixel con valore 1 = pixel bosco) \[opzionale\]: 
 il valore 1 del pixel di questo raster verrà considerato bosco a prescindere 
 dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione bosco. [vedi schema in immagine 1](#immagine_1)
- - Un raster binario NON BOSCO* (pixel con valore 1 = pixel NON bosco) \[OPZIONALE\]: 
+ - Un raster binario NON BOSCO[*](#mask) (pixel con valore 1 = pixel NON bosco) \[opzionale\]: 
 il valore 1 del pixel di questo raster verrà considerato non bosco a prescindere 
 dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione di aree da escludere dall'area bosco. [vedi schema in immagine 1](#immagine_1)
@@ -43,30 +42,20 @@ come bosco.
 - Area minima (m2) - L'area minima per definire un'area a bosco.
 - Larghezza minima (m) - L'area minima per definire un'area a bosco.
 
+
+
+
 ### Output
+ 
+Gli output sotto sono entrambi opzionali - nel senso che si possono creare entrambi, uno
+di essi o nessuno dei due. Il raster viene creato in maniera predefinita, 
+mentre il vettoriale no, deve essere l'utente che sceglie di crearlo. Entrambi possono
+essere creati come file temporanei o meno.
 
-Come output c'
-Gli output sotto sono entrambi opzionali - nel senso che si possono creare entrambi o nessuno dei due.
+- **Area Bosco Raster** - \[opzionale\] - Il raster con l'area a bosco.
+- **Area Bosco Vettoriale** - \[opzionale\] - Il file vettoriale delle aree a bosco, 
+tematizzato e con una colonna "area_ha" con  l'area in ettari.
 
-- Raster output - L'area minima per definire un'area a bosco.
-- Vettoriale output - Il file vettoriale delle aree a bosco, tematizzato e con una colonna "area_ha" con 
-l'area in ettari.
-
-
-        * Attenzione - i due raster binari Bosco e Non Bosco devono avere
-        valori zero (0) per i pixel non appartenenti alla cateogria, 
-        e un numero diverso da zero (preferibilmente 1) per i pixel 
-        appartenenti alla categoria. Ad esempio si può ottenere un raster 
-        "Non Bosco" da poligoni che rappresentano le aree urbanizzate 
-        facendo la conversione da formato vettoriale a raster 
-        (mediante il comando nel menù raster==>Conversione==>Rasterizza)
-        
-**NB:** nel caso di utilizzo di entrambi i raster "binari", in caso di 
-valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
-[vedi schema in immagine 1](#immagine_1)
-
-<a name="immagine_1"></a>
-![Esempio di bosco e non bosco](img/mask.png)
 
 ## Installazione  
 
@@ -102,4 +91,45 @@ e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sull
 
 ## Esempio
 
-Scaricare il file chm.tif che trovate [QUI](extra/chm.tif)
+![chm](extra/example/sat.jpg)
+
+Scaricare il file chm.tif che trovate [QUI](extra/example/chm.tif) ed aggiungerlo 
+al progetto QGIS - tematizzatelo come preferite:
+
+![chm](extra/example/chmColor.jpg)
+
+Aprite il plugin e selezionate il chm e avviate l'elaborazione.
+Il CHM verrà convertito internamente ad un file binario
+
+![chm](extra/example/chmBinSat.jpg)
+
+E le aree a bosco identificate e accorpate nel raster in output. La aree 
+con estensione sotto soglia vengono eliminate (Vedi differenza tra l'immagini seguenti 
+sopra e sotto )
+
+![chm](extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg)
+![chm](extra/example/risultatoCleanAreePiccoleNoBosco.jpg)
+
+Se l'utente vuole esportare anche il file vettoriale con le aree, questo deve esssere espressamente
+definito nel pannello delle impostazioni [vedi sezione ouput](#output)
+
+
+<hr>
+<hr>
+
+<a name="mask"></a>
+
+        * Attenzione - i due raster binari Bosco e Non Bosco devono avere
+        valori zero (0) per i pixel non appartenenti alla cateogria, 
+        e un numero diverso da zero (preferibilmente 1) per i pixel 
+        appartenenti alla categoria. Ad esempio si può ottenere un raster 
+        "Non Bosco" da poligoni che rappresentano le aree urbanizzate 
+        facendo la conversione da formato vettoriale a raster 
+        (mediante il comando nel menù raster==>Conversione==>Rasterizza)
+        
+**NB:** nel caso di utilizzo di entrambi i raster "binari", in caso di 
+valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
+[vedi schema in immagine 1](#immagine_1)
+
+<a name="immagine_1"></a>
+![Esempio di bosco e non bosco](img/mask.png)

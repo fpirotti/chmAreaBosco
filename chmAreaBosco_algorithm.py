@@ -535,7 +535,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                         return {}
 
         self.setProgressText(feedback, temppathfile)
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco Closing ")
+        out_rlayer = QgsRasterLayer(temppathfile, "Area Bosco")
 
         mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
         if success is False:
