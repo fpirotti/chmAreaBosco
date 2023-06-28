@@ -1,12 +1,12 @@
 # Da CHM a Area Bosco
 ![alt text](logo.png)
 
-[#descrizione](Descrizione) |
-[INPUT](Metodi) |
-[Installazione](Installazione) |
-[Benchmark](benchmark) |
-[Esempio 1](Esempio_1) |
-[Esempio 2](Esempio_2)
+[#descrizione](#Descrizione) |
+[INPUT](#Metodi) |
+[Installazione](#Installazione) |
+[Benchmark](#benchmark) |
+[Esempio 1](#Esempio_1) |
+[Esempio 2](#Esempio_2)
 
 ## Descrizione  
 
