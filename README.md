@@ -107,8 +107,8 @@ E le aree a bosco identificate e accorpate nel raster in output. La aree
 con estensione sotto soglia vengono eliminate (Vedi differenza tra l'immagini seguenti 
 sopra e sotto )
 
-< img src="extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg" width=300 >
-< img src="extra/example/risultatoCleanAreePiccoleNoBosco.jpg" width=300 > 
+<img src="extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg" width=300 >
+<img src="extra/example/risultatoCleanAreePiccoleNoBosco.jpg" width=300 > 
 
 Se l'utente vuole esportare anche il file vettoriale con le aree, questo deve esssere espressamente
 definito nel pannello delle impostazioni [vedi sezione ouput](#output)
