@@ -1,7 +1,8 @@
 # Da CHM a Area Bosco
 ![alt text](logo.png)
 
-[#descrizione](#Descrizione) |
+
+[Descrizione](#Descrizione) |
 [INPUT](#Metodi) |
 [Installazione](#Installazione) |
 [Benchmark](#benchmark) |
@@ -83,3 +84,12 @@ Premere il pulsante "installa" ed aspettare la fine dell'installazione.
 
 ## Benchmark
 
+Three CHM rasters with the following size have been tested. All CHMs 
+have 0.5 m resolution - time for processing using a normal laptop with 8 MB RAM 
+and a i7 processor 3 GHz is reported.
+is reported  
+- X: 3845 Y: 2838 - (50 MB)  - 2 secondi
+- X: 4506 Y: 5770 - (180 MB) - 13 secondi
+- X: 27413 Y: 19240 (4.6 GB)-
+
+NB 
