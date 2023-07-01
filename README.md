@@ -93,12 +93,12 @@ e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sull
  
 <img src="extra/example/sat.jpg" width=400 >
 
-Scaricare il file chm.tif che trovate [QUI](extra/example/chm.tif) (usate la versione "raw" da Github) 
+[Scaricare il file CHM che trovate QUI](https://raw.githubusercontent.com/cirgeo/chmAreaBosco/master/extra/example/chm.tif) (usate la versione "raw" da Github) 
 ed aggiungerlo al progetto QGIS - tematizzatelo come preferite:
  
 <img src="extra/example/chmColor.jpg" width=400 >
 
-Aprite il plugin e selezionate il chm e avviate l'elaborazione.
+Aprite il plugin e selezionate il chm come raster in input e avviate l'elaborazione.
 Il CHM verrà convertito internamente ad un file binario
  
 <img src="extra/example/chmBinSat.jpg" width=400 >
@@ -114,7 +114,13 @@ Se l'utente vuole esportare anche il file vettoriale con le aree, questo deve es
 definito nel pannello delle impostazioni [vedi sezione ouput](#output)
 
 
-<hr>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
 <hr>
 
 <a name="mask"></a>

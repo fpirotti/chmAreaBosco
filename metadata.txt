@@ -6,7 +6,7 @@
 name=chmAreaBosco
 qgisMinimumVersion=3.0
 description=Converts a CHM to a vector layer with forest polygons according to various parameters defined by the user that reflect different definitions of forest
-version=1.2.0
+version=1.3.0
 author=Francesco Pirotti - CIRGEO/TESAF University of Padova
 email=francesco.pirotti@unipd.it
 
