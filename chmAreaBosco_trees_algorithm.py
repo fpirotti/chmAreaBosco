@@ -159,7 +159,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        ksize = 15
+        ksize = 5
         if ksize % 2 == 0:
             feedback.reportError("Kernel size must be odd / vuole un valore dispari la dimensione "
                                  "della finestra di template.")

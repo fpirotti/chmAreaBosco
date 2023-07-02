@@ -1,0 +1,143 @@
+# Tree Detection
+![alt text](logo3.png)
+   
+
+## Description  
+
+The plugin process *CHM => Single Tree Detection* applies latest methods to detect tree 
+top position. 
+
+It is optimized for speed with a simple initial procedure that seeds
+using local maxima with a small kernel, and then removes false positives with 
+successive iterations. The rationale is simply that a small kernel is much faster 
+than a large or adaptive kernel, and can therefore be applied to all the raster grid.
+Only after having all local maxima, larger kernels can be applied only to local maxima 
+positions, thus not all the raster. 
+
+A likelyhood index can optionally be added to address how close the local
+maxima kernel matches
+
+Il peso del plugin è circa 110 MB in quanto include la libreria 
+grafica [OpenCV - *Open Source Computer Vision Library*](https://it.wikipedia.org/wiki/OpenCV) (109 MB)
+che consente elaborazioni ottimizzate su immagini raster.
+
+## Metodi
+
+### Input 
+
+ - **Input CHM** - Un livello raster contenente il CHM ovvero un modello delle chiome. 
+Questo raster deve necessariamente essere accurato, 
+in quanto fornisce l'informazione di base per la 
+creazione dell'area a bosco.
+ - **Input Maschera Pixel Bosco** - [Un raster binario BOSCO*](#mask) (pixel con valore 1 = pixel bosco) \[opzionale\]: 
+il valore 1 del pixel di questo raster verrà considerato bosco a prescindere 
+dal risultato del plugin, ovvero questa informazione avrà priorità
+nella definizione bosco. [vedi schema in immagine 1](#mask)
+ -  **Input Maschera Pixel Non Bosco**  - [Un raster binario NON BOSCO*](#mask) (pixel con valore 1 = pixel NON bosco) \[opzionale\]: 
+il valore 1 del pixel di questo raster verrà considerato non bosco a prescindere 
+dal risultato del plugin, ovvero questa informazione avrà priorità
+nella definizione di aree da escludere dall'area bosco. [vedi schema in immagine 1](#mask)
+- **Soglia altezza chioma (m)** - l'altezza della chioma minima per definire il pixel
+come appartenente ad un albero.
+- **Densità copertura (%)** - La proporzione minima coperta da chioma perchè l'area venga inclusa
+come bosco.
+- **Area minima (m2)** - L'area minima per definire un'area a bosco.
+- **Larghezza minima (m)** - L'area minima per definire un'area a bosco.
+
+
+
+
+### Output
+ 
+Gli output sotto sono entrambi opzionali - nel senso che si possono creare entrambi, uno
+di essi o nessuno dei due. Il raster viene creato in maniera predefinita, 
+mentre il vettoriale no, deve essere l'utente che sceglie di crearlo. Entrambi possono
+essere creati come file temporanei o meno.
+
+- **Area Bosco Raster** - \[opzionale\] - Il raster con l'area a bosco.
+- **Area Bosco Vettoriale** - \[opzionale\] - Il file vettoriale delle aree a bosco, 
+tematizzato e con una colonna "area_ha" con  l'area in ettari.
+
+
+## Installazione  
+
+Scaricare il file compresso "chmAreaBosco-xxxx.zip" dell'ultima versione
+[al link GITHUB](https://github.com/cirgeo/chmAreaBosco/releases) dove 
+xxx indica il sistema operativo
+
+Andare sul menù QGIS "Plugins"=>"Gestisci ed Installa Plugins" e selezionare 
+"Installa da ZIP" nella parte sinistra della finestra ed il file compresso scaricato.
+Premere il pulsante "installa" ed aspettare la fine dell'installazione.
+
+
+![installa plugin](img/install.jpg)
+
+
+## Benchmark
+
+Three CHM rasters with the following size have been tested. All CHMs 
+have 0.5 m resolution - time for processing using a normal laptop with 16 MB RAM 
+and a 12th Gen Intel(R) Core(TM) i7 1.10 GHz
+  
+- X: 3845 Y: 2838 - (50 MB)  -  4 secondi (v1.1.0) - 2 secondi  (v1.2.0)
+- X: 4506 Y: 5770 - (180 MB) - 13 secondi (v1.1.0) - 5 secondi  (v1.2.0)
+- X: 27413 Y: 19240 (4.6 GB)-  25 minuti  (v1.1.0) - 7 minuti  (v1.2.0)
+
+NB - la velocità dipende molto dalla complessità della struttura 
+orizzontale del CHM ovvero dal rapporto spazi senza chiome e spazi con chiome.
+A parità di dimensione del raster CHM, un'area completamente coperta da chiome o 
+completamente scoperta da vegetazione avrà tempi di elaborazione molto più veloci 
+rispetto ad un'area con una struttura più a "scacchiera" ovvero alternanza di aree con 
+e senza vegetazione. Questo perchè l'elaborazione lavora sui margini e non sulle parti interne.
+
+
+## Esempio
+ 
+<img src="extra/example/sat.jpg" width=400 >
+
+[Scaricare il file CHM che trovate QUI](https://raw.githubusercontent.com/cirgeo/chmAreaBosco/master/extra/example/chm.tif) (usate la versione "raw" da Github) 
+ed aggiungerlo al progetto QGIS - tematizzatelo come preferite:
+ 
+<img src="extra/example/chmColor.jpg" width=400 >
+
+Aprite il plugin e selezionate il chm come raster in input e avviate l'elaborazione.
+Il CHM verrà convertito internamente ad un file binario
+ 
+<img src="extra/example/chmBinSat.jpg" width=400 >
+
+E le aree a bosco identificate e accorpate nel raster in output. La aree 
+con estensione sotto soglia vengono eliminate (Vedi differenza tra l'immagini seguenti 
+sopra e sotto )
+
+<img src="extra/example/risultatoNoCleanAreePiccoleNoBosco.jpg" width=400 >
+<img src="extra/example/risultatoCleanAreePiccoleNoBosco.jpg" width=400 > 
+
+Se l'utente vuole esportare anche il file vettoriale con le aree, questo deve esssere espressamente
+definito nel pannello delle impostazioni [vedi sezione ouput](#output)
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<hr>
+
+<a name="mask"></a>
+
+        * Attenzione - i due raster binari Bosco e Non Bosco devono avere
+        valori zero (0) per i pixel non appartenenti alla cateogria, 
+        e un numero diverso da zero (preferibilmente 1) per i pixel 
+        appartenenti alla categoria. Ad esempio si può ottenere un raster 
+        "Non Bosco" da poligoni che rappresentano le aree urbanizzate 
+        facendo la conversione da formato vettoriale a raster 
+        (mediante il comando nel menù raster==>Conversione==>Rasterizza)
+        
+**NB:** nel caso di utilizzo di entrambi i raster "binari", in caso di 
+valori in conflitto ovvero discordanti, viene data priorità al raster non-bosco
+[vedi schema in immagine 1](#immagine_1)
+
+<a name="immagine_1"></a>
+![Esempio di bosco e non bosco](img/mask.png)
