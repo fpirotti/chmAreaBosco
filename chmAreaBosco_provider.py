@@ -33,6 +33,7 @@ __revision__ = '$Format:%H$'
 from qgis.core import QgsProcessingProvider
 from .chmAreaBosco_algorithm import CHMtoForestAlgorithm
 from .chmAreaBosco_trees_algorithm import CHMtoTreesAlgorithm
+from .coregister import CoRegister
 
 from qgis.PyQt.QtGui import QIcon
 import inspect
@@ -59,6 +60,7 @@ class CHMtoForestProvider(QgsProcessingProvider):
         """
         self.addAlgorithm(CHMtoForestAlgorithm())
         self.addAlgorithm(CHMtoTreesAlgorithm())
+        self.addAlgorithm(CoRegister())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 

@@ -61,12 +61,14 @@ class CHMtoForestPlugin(object):
         self.initProcessing()
         icon = os.path.join(os.path.join(cmd_folder, 'logo.png'))
         icon2 = os.path.join(os.path.join(cmd_folder, 'logo2.png'))
+        icon3 = os.path.join(os.path.join(cmd_folder, 'logo3.png'))
         self.action = QAction(
              QIcon(icon),
              u"CHM => Bosco", self.iface.mainWindow())
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action)
         self.iface.addToolBarIcon(self.action)
+
         self.action2 = QAction(
              QIcon(icon2),
              u"CHM => Single Tree Detection", self.iface.mainWindow())
@@ -74,13 +76,24 @@ class CHMtoForestPlugin(object):
         self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
         self.iface.addToolBarIcon(self.action2)
 
+        self.action3 = QAction(
+             QIcon(icon3),
+             u"CHM => Co-Registra", self.iface.mainWindow())
+        self.action3.triggered.connect(self.run3)
+        self.iface.addPluginToMenu(u"&Reg. Veneto Servizio Foreste", self.action3)
+        self.iface.addToolBarIcon(self.action3)
+
     def unload(self):
         QgsApplication.processingRegistry().removeProvider(self.provider)
         self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action)
         self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action2)
+        self.iface.removePluginMenu(u"&Reg. Veneto Servizio Foreste", self.action3)
         self.iface.removeToolBarIcon(self.action)
         self.iface.removeToolBarIcon(self.action2)
+        self.iface.removeToolBarIcon(self.action3)
     def run(self):
         processing.execAlgorithmDialog("Reg. Veneto Servizio Foreste:CHM => Bosco")
     def run2(self):
         processing.execAlgorithmDialog("Reg. Veneto Servizio Foreste:CHM => Single Tree Detection")
+    def run3(self):
+        processing.execAlgorithmDialog("Reg. Veneto Servizio Foreste:CHM => Co-Registra")

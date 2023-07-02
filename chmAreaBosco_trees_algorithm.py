@@ -76,6 +76,8 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
     tmpdir = ''
     OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
+    TREEPOINTS = 'treepoints'
+    THRESHOLD = 'similarityThreshold'
     # PERC_COVER = 'PERC_COVER'
     # MIN_AREA = 'MIN_AREA'
     # MIN_LARGH = 'MIN_LARGH'
@@ -95,8 +97,26 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 self.tr('Input CHM')
             )
         )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                'altezza_alberochioma_m',
+                self.tr('Soglia altezza chioma (m)'),
+                defaultValue=2.0
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.THRESHOLD,
+                self.tr('Grado di similitudine (tra 0 ed 1)'),
+                type=QgsProcessingParameterNumber.Double,
+                maxValue=1.0,
+                minValue=0.0,
+                defaultValue=0.9
+            )
+        )
         self.addParameter(QgsProcessingParameterVectorDestination('Aree chiome', 'poligono', type=QgsProcessing.TypeVectorPolygon, createByDefault=True, defaultValue=None))
-        self.addParameter(QgsProcessingParameterFeatureSink('Posizione alberi', 'punti', type=QgsProcessing.TypeVectorPoint, createByDefault=True, defaultValue=None))
+        self.addParameter(QgsProcessingParameterFeatureSink('Posizione alberi', self.TREEPOINTS, type=QgsProcessing.TypeVectorPoint, createByDefault=True, defaultValue=None))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -107,43 +127,27 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         outputs = {}
         start = datetime.now()
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
-        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-
+        outputTreePoints = self.parameterAsVectorLayer(parameters, self.TREEPOINTS, context)
+        threshold = parameters[self.THRESHOLD]
         areaPixel = source.rasterUnitsPerPixelX()*source.rasterUnitsPerPixelX()
         feedback.setProgressText("Preparo il raster in output")
-        pipe = QgsRasterPipe()
-        sdp = source.dataProvider()
+
         if source.bandCount() != 1:
             feedback.reportError('Il raster CHM deve avere solamente una banda - il file ' +
                                  str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
                                  )
             return {}
 
-        pipe.set(sdp.clone())
-
-        rasterWriter = QgsRasterFileWriter(temppathfile)
-        error = rasterWriter.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
-
-        if error == QgsRasterFileWriter.NoError:
-            print("Output preparato con successo!")
-        else:
-            feedback.reportError('Non sono riuscito ad implementare il raster nuovo OPENING - ' + str(temppathfile))
-            return {}
-
-        feedback.setProgressText("Creo il raster temporaneo " + temppathfile+ " di tipo " +  str(source.dataProvider().bandScale(0)))
-        tempRasterLayer = QgsRasterLayer(temppathfile)
-        provider = tempRasterLayer.dataProvider()
-        feedback.setProgressText("reato il raster temporaneo " + provider.name() + " di tipo " +  str(source.dataProvider().bandScale(0)) + " -- - " + str( provider.xSize()) + " x " + str(provider.ySize()))
-        block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
-
-        if provider is None:
-            feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
-            return {}
-
         feedback.setProgressText("Leggo il raster")
+        try:
+            ds = gdal.Open(str(source.source()))
+        except:
+            feedback.reportError('Non sono riuscito a leggere il raster CHM ' +
+                                 gdal.GetLastErrorMsg() )
+            return {}
 
-        ds = gdal.Open(str(source.source()))
-        img =  np.array(ds.GetRasterBand(1).ReadAsArray())
+        img = np.array(ds.GetRasterBand(1).ReadAsArray())
+
         if img is None:
             feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
             return {}
@@ -155,43 +159,101 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        feedback.setProgressText("Applico soglia di altezza di : " +
-                                 str(parameters['altezza_alberochioma_m']) + ' metri ')
-        # binarize the image
-        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
+        ksize = 15
+        if ksize % 2 == 0:
+            feedback.reportError("Kernel size must be odd / vuole un valore dispari la dimensione "
+                                 "della finestra di template.")
+            return {}
+        template = np.zeros((ksize, ksize))
+        mid = int((ksize-1)/2)
+        template[ mid, mid ] = 1
+        template = (cv.GaussianBlur(template, (ksize-2, ksize-2), 0) * 255)
 
-        feedback.setProgressText("Processo Invert raster")
-        binr = ((binr - 1) * -1).astype('B')
+        cv.imwrite("template.jpg", template)
+        template = cv.imread("template.jpg", cv.IMREAD_GRAYSCALE)
+        res = cv.matchTemplate(img.astype('B'), template , cv.TM_CCOEFF_NORMED)
+        dst = cv.copyMakeBorder(res, mid, mid, mid, mid,
+                                cv.BORDER_CONSTANT, None, 0)
 
-        opening = cv.distanceTransform(binr, cv.DIST_L2, 3)
-        #opening[opening == 0] = np.NaN
-        provider.setEditable(True)
-        data = bytearray(bytes(opening))
-        block.setData(data)
-        block.setNoDataValue(0)
-        writeok = provider.writeBlock(block, 1)
-        if writeok:
-            feedback.setProgressText("Successo nella scrittura del dato")
+        #cv.imwrite("templateres.jpg", dst*255)
+        loc = np.where(dst >= threshold)
+        loct = loc + (img[loc], dst[loc])
+
+        outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
+
+        QgsProject.instance().addMapLayer(outputTreePoints)
+
+        return results
+    
+
+    def _create_points(self, points, sdp, feedback):
+        """Create points for testing"""
+
+        srcCRS = sdp.crs()
+        point_layer = QgsVectorLayer('Point?crs=EPSG:4326', 'keypoints', 'memory')
+        point_layer.setCrs(srcCRS)
+        point_provider = point_layer.dataProvider()
+        point_provider.addAttributes([QgsField('X', QVariant.Double)])
+        point_provider.addAttributes([QgsField('Y', QVariant.Double)])
+        point_provider.addAttributes([QgsField('Similarity', QVariant.Double)])
+        point_provider.addAttributes([QgsField('TreeHeight', QVariant.Double)])
+        #point_provider.addAttributes([QgsField('sizeX', QVariant.Double)])
+        caps = point_layer.dataProvider().capabilities()
+        if caps & QgsVectorDataProvider.AddFeatures:
+            point_layer.startEditing()
+            feedback.setProgressText("Salvo: " + str(len(points[0])) + " posizione alberi.")
+            cnt = 0
+
+            every = int(len(points[0])/100)
+            zz = zip(*points[::-1])
+
+            for pt in zz:
+                cnt += 1
+                if every > 100:
+                    if cnt % every == 0:
+                        feedback.setProgressText( str( round(cnt/len(points[0])*100) ) + "% ....")
+
+                feat = QgsFeature(point_layer.fields())
+                x, y = self.local2src(pt[2], pt[3], sdp)
+                feat.setAttributes([x, y, float(pt[0]), float(pt[1])])
+
+                geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
+                feat.setGeometry(geom)
+                b = point_layer.addFeature(feat)
+
+                if not b:
+                    print("Error adding feature")
+                    print(point_layer.lastError())
+                    print(point_layer.isValid())
+                    break
+            commErr = point_layer.commitChanges()
+            if not commErr:
+                print("Error committing feature")
+                print(point_layer.lastError())
+                print(point_layer.commitErrors())
+
+            print("------------tot features")
+            print(point_layer.featureCount())
+
         else:
-            feedback.setProgressText("Non sono riuscito a scrivere il blocco raster")
+            print("Error")
             return {}
 
-        provider.setEditable(False)
+        return point_layer
 
-        out_rlayer = QgsRasterLayer(temppathfile, "Trees")
+    def local2src(self, x, y, dataProvider, verbose=False ):
+        x1 = float(0)
+        y1 = float(0)
+        if isinstance(dataProvider, QgsRasterDataProvider):
+            ext = QgsRectangle(dataProvider.extent())
+            x1 = ext.xMinimum() + ( float(x) * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize()))
+            y1 = ext.yMaximum() - ( float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
+            if verbose:
+                print( str(x) + ' - ' + str(x1)   )
 
-        mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
-        if success is False:
-            feedback.setProgressText( mess + " - " + dirname+"/extra/style.qml")
-        else:
-            feedback.setProgressText( mess)
+        return x1, y1
 
-        QgsProject.instance().addMapLayer(out_rlayer)
-        feedback.setProgressText(tempRasterLayer.source())
-        stop = datetime.now()
-        feedback.setProgressText("Tempo di elaborazione: " + str(stop-start))
-        stop = datetime.now()
-        return results
+    
     def name(self):
         """
         Returns the algorithm name, used for identifying the algorithm. This

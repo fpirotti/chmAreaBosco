@@ -50,6 +50,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFileDestination)
 
+
 dirname, filename = os.path.split(os.path.abspath(__file__))
 sys.path.append(dirname)
 import cv2 as cv
@@ -73,16 +74,12 @@ class CoRegister(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    tmpdir = ''
-    OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
-    INPUT_SIBOSCO = 'INPUT_SIBOSCO'
-    INPUT_NOBOSCO = 'INPUT_NOBOSCO'
-    # PERC_COVER = 'PERC_COVER'
-    # MIN_AREA = 'MIN_AREA'
-    # MIN_LARGH = 'MIN_LARGH'
-    # ALTEZZA_MIN_ALBERO = 'ALTEZZA_MIN_ALBERO'
-
+    INPUT_REGISTER = 'INPUT_REGISTER'
+    INPUT_REFERENCE = 'INPUT_REFERENCE'
+    KEYPOINTS = 'keypoints'
+    timePre = datetime.now()
+    timePost = datetime.now()
+    totTime = (timePost - timePre).total_seconds()
     def initAlgorithm(self, config):
         """
         Here we define the inputs and output of the algorithm, along
@@ -93,80 +90,48 @@ class CoRegister(QgsProcessingAlgorithm):
         # geometry.
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.INPUT,
-                self.tr('Input CHM')
+                self.INPUT_REGISTER,
+                self.tr('Input Register')
             )
         )
 
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.INPUT_SIBOSCO,
-                self.tr('Input Maschera Pixel Bosco'),
-                optional=True, defaultValue=None
+                self.INPUT_REFERENCE,
+                self.tr('Input Reference')
             )
         )
-
-        self.addParameter(
-            QgsProcessingParameterRasterLayer(
-                self.INPUT_NOBOSCO,
-                self.tr('Input Maschera Pixel No-Bosco'),
-                optional=True, defaultValue=None
-            )
-        )
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        self.addParameter(
-            QgsProcessingParameterRasterDestination(
-                self.OUTPUT,
-                self.tr('Output layer OPEN')
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterFeatureSink('keypoints', 'Keypoints',
-                                                  type=QgsProcessing.TypeVectorPoint,
-                                              createByDefault=True, defaultValue=None))
 
         self.addParameter(
             QgsProcessingParameterNumber(
-                'altezza_alberochioma_m',
-                self.tr('Soglia altezza chioma (m)'),
+                'maxPoints',
+                self.tr('Numero massimo di punti'),
                 defaultValue=2.0
             )
         )
 
         self.addParameter(
-            QgsProcessingParameterNumber(
-                'densit_minima_percentuale',
-                self.tr('Densità copertura (%)'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue=20.0
-            )
-        )
-        self.addParameter(
-            QgsProcessingParameterNumber(
-                'area_minima_m2',
-                self.tr('Area minima (m2)'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue=2000.0
-            )
+            QgsProcessingParameterFeatureSink('Features',
+                                            self.KEYPOINTS,
+                                            type=QgsProcessing.TypeVectorPoint,
+                                            createByDefault=True,
+                                            defaultValue=None)
         )
 
-        self.addParameter(
-            QgsProcessingParameterNumber(
-                'larghezza_minima_m',
-                self.tr('Larghezza minima'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue=20.0
-            )
-        )
 
     #def icon(self):
         #cmd_folder = os.path.split(inspect.getfile(inspect.currentframe()))[0]
         #icon = QIcon(os.path.join(os.path.join(cmd_folder, 'logo.png')))
         #return icon
-
+    def getTimePassed(self, feedback, message=None):
+        self.timePost = datetime.now()
+        self.timeDiff = (self.timePost-self.timePre)
+        if message is not None:
+            feedback.setProgressText("Time passed: " + str(self.timeDiff) + " for " + message)
+        else:
+            feedback.setProgressText("Time passed: " + str(self.timeDiff) )
+        self.totTime += self.timeDiff.total_seconds()
+        self.timePre = datetime.now()
     def local2src(self, x, y, dataProvider, verbose=False ):
         x1 = 0
         y1 = 0
@@ -182,8 +147,9 @@ class CoRegister(QgsProcessingAlgorithm):
     def _create_points(self, kp1, sdp):
         """Create points for testing"""
 
+        srcCRS = sdp.crs()
         point_layer = QgsVectorLayer('Point?crs=EPSG:4326', 'keypoints', 'memory')
-
+        point_layer.setCrs(srcCRS)
         point_provider = point_layer.dataProvider()
         point_provider.addAttributes([QgsField('X', QVariant.Double)])
         point_provider.addAttributes([QgsField('Y', QVariant.Double)])
@@ -217,6 +183,75 @@ class CoRegister(QgsProcessingAlgorithm):
 
         return point_layer
 
+    def matchPoints(self, des1, des2, kps1, kps2, img1, img2):
+        min_match=10
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks = 50)
+
+        flann = cv.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1, des2, k=2)
+
+        # store all the good matches (g_matches) as per Lowe's ratio
+        g_match = []
+        for m,n in matches:
+            if m.distance < 0.7 * n.distance:
+                g_match.append(m)
+        if len(g_match)>min_match:
+            src_pts = np.float32([ kps1[m.queryIdx].pt for m in g_match ]).reshape(-1,1,2)
+            dst_pts = np.float32([ kps2[m.trainIdx].pt for m in g_match ]).reshape(-1,1,2)
+
+            M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC,5.0)
+            matchesMask = mask.ravel().tolist()
+
+            h,w = img1.shape
+            pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+            dst = cv.perspectiveTransform(pts,M)
+
+            img2 = cv.polylines(img2, [np.int32(dst)], True, (0,255,255) , 3, cv.LINE_AA)
+
+        else:
+            print("Not enough matches have been found! - %d/%d" % (len(g_match), min_match))
+            matchesMask = None
+
+        draw_params = dict(matchColor = (0,255,255),
+                           singlePointColor = (0,255,0),
+                           matchesMask = matchesMask, # only inliers
+                           flags = 2)
+        # region corners
+        cpoints = np.int32(dst)
+        a, b, c = cpoints.shape
+
+        # reshape to standard format
+        c_p = cpoints.reshape((b, a, c))
+
+        # crop matching region
+        matching_region = crop_region(path_train, c_p)
+
+        img3 = cv.drawMatches(img1, kps1, img2, kps2, g_match, None, **draw_params)
+        return (img3, matching_region)
+
+    def crop_region(self, path, c_p):
+        """
+          This function crop the match region in the input image
+          c_p: corner points
+        """
+        # 3 or 4 channel as the original
+        img = cv.imread(path, -1)
+
+        # mask
+        mask = np.zeros(img.shape, dtype=np.uint8)
+
+        # fill the the match region
+        channel_count = img.shape[2]
+        ignore_mask_color = (255,) * channel_count
+        cv.fillPoly(mask, c_p, ignore_mask_color)
+
+        # apply the mask
+        matched_region = cv.bitwise_and(img, mask)
+
+        return matched_region
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -225,176 +260,43 @@ class CoRegister(QgsProcessingAlgorithm):
         results = {}
         outputs = {}
         start = datetime.now()
-        source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
-        sourceNoBosco = self.parameterAsRasterLayer(parameters, self.INPUT_NOBOSCO, context)
-        sourceSiBosco = self.parameterAsRasterLayer(parameters, self.INPUT_SIBOSCO, context)
-        temppathfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-        outputKeyPoints = self.parameterAsVectorLayer(parameters, "keypoints", context)
-
-        # ret, markers = cv.connectedComponents(sure_fg)
-        # https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html
-        ksize = parameters['larghezza_minima_m']/source.rasterUnitsPerPixelX()
-        minArea = parameters['area_minima_m2']
-        ksizeGaps = math.sqrt(parameters['area_minima_m2'] / 3.14)
-        areaPixel = source.rasterUnitsPerPixelX()*source.rasterUnitsPerPixelX()
-        feedback.setProgressText("Preparo il raster in output")
-        pipe = QgsRasterPipe()
-        sdp = source.dataProvider()
-        if source.bandCount() != 1:
-            feedback.reportError('Il raster CHM deve avere solamente una banda - il file ' +
-                                 str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
-                                 )
-            return {}
-
-        pipe.set(sdp.clone())
-
-        rasterWriter = QgsRasterFileWriter(temppathfile)
-        error = rasterWriter.writeRaster(pipe, sdp.xSize(), sdp.ySize(), sdp.extent(), sdp.crs())
-
-        if error == QgsRasterFileWriter.NoError:
-            print("Output preparato con successo!")
-        else:
-            feedback.reportError('Non sono riuscito ad implementare il raster nuovo OPENING - ' + str(temppathfile))
-            return {}
-
-        feedback.setProgressText("Creo il raster temporaneo " + temppathfile+ " di tipo " +  str(source.dataProvider().bandScale(0)))
-        tempRasterLayer = QgsRasterLayer(temppathfile)
-        provider = tempRasterLayer.dataProvider()
-        feedback.setProgressText("reato il raster temporaneo " + provider.name() + " di tipo " +  str(source.dataProvider().bandScale(0)) + " -- - " + str( provider.xSize()) + " x " + str(provider.ySize()))
-        block = provider.block(1, provider.extent(), provider.xSize(), provider.ySize())
-
-        if provider is None:
-            feedback.reportError('Cannot find or read ' + tempRasterLayer.source())
-            return {}
+        source = self.parameterAsRasterLayer(parameters, self.INPUT_REGISTER, context)
+        reference = self.parameterAsRasterLayer(parameters, self.INPUT_REFERENCE, context)
+        outputKeyPoints = self.parameterAsVectorLayer(parameters, self.KEYPOINTS, context)
 
         feedback.setProgressText("Leggo il raster")
+        try:
+            ds = gdal.Open(str(source.source()))
+        except:
+            feedback.reportError('Non sono riuscito a leggere il raster CHM ' +
+                                 gdal.GetLastErrorMsg() )
+            return {}
 
-        ds = gdal.Open(str(source.source()))
-        img =  np.array(ds.GetRasterBand(1).ReadAsArray())
-        feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
-        #img = cv.imread(source.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
+        img = np.array(ds.GetRasterBand(1).ReadAsArray())
+        feedback.setProgressText("Convert to 8 bit")
+        img8bit = (img*10).astype('B')
         if img is None:
             feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
             return {}
 
+        # Initiate ORB detector
+        orb = cv.ORB_create()
+        sift = cv.SIFT_create()
+        feedback.setProgressText("Preparing SIFT")
+        kps, des = sift.detectAndCompute(img8bit, None)
+        self.getTimePassed(feedback, "SIFT with " + str(len(kps)) + " points")
+        outputKeyPoints = self._create_points(kps, source.dataProvider())
+        QgsProject.instance().addMapLayer(outputKeyPoints)
+        # find the keypoints with ORB
+        kp = orb.detect(img8bit, None)
+        self.getTimePassed(feedback, "ORB with " + str(len(kp)) + " points")
+        kp, des = orb.compute(img8bit, kp)
+        self.getTimePassed(feedback, "ORB2 with " + str(len(kp)) + " points")
+
+        feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
         # Check for cancelation
         if feedback.isCanceled():
             return {}
-        feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
-        feedback.setProgressText("Applico soglia di altezza di : " +
-                                 str(parameters['altezza_alberochioma_m']) + ' metri ')
-        # binarize the image
-        binr = cv.threshold(img, parameters['altezza_alberochioma_m'], 1, cv.THRESH_BINARY)[1]
-
-        # Check for cancelation
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Creo un kernel di : " + str(round(ksize, 3)) +
-                                 '(' + str(int(ksize)) +
-                                 ') metri  e larghezza minima ' + str(parameters['larghezza_minima_m']))
-
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (int(ksize), int(ksize)))
-        # Check for cancelation
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Processo Dilate raster")
-       # closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Processo Erode  raster")
-        #opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
-        if feedback.isCanceled():
-            return {}
-
-        feedback.setProgressText("Processo Invert raster")
-       # binr = ((opening - 1) * -1).astype('B')
-        binr = ((binr - 1) * -1).astype('B')
-
-        opening = cv.distanceTransform(binr, cv.DIST_L2, 3)
-        feedback.setProgressText("Processo contour raster")
-        contours, _ = cv.findContours(binr, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
-        for i in range(len(contours)):
-            print(i)
-            continue
-            aa = int(cv.contourArea(contours[i])*areaPixel )
-            if aa < minArea:
-                cv.drawContours(opening, contours, i, 1, -1)
-            else:
-                cv.drawContours(opening, contours, i, 0, -1)
-
-        #closing = cv.morphologyEx(binr, cv.MORPH_CLOSE, kernel)
-       # opening = cv.morphologyEx(closing, cv.MORPH_OPEN, kernel)
-
-        #opening = cv.morphologyEx( cv.morphologyEx(binr, cv.MORPH_OPEN, kernel) , cv.MORPH_CLOSE, kernel)
-        # Check for cancelation
-
-
-        if sourceSiBosco is not None:
-            if sourceSiBosco.bandCount() != 1:
-                feedback.reportError('Troppe bande ('+ str(sourceSiBosco.bandCount()) +
-                                     ') nel raster Bosco letto dal file' +
-                                     sourceSiBosco.source())
-                return {}
-            imgSiBosco = cv.imread(sourceSiBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
-            if imgSiBosco is None:
-                feedback.reportError('Errore nella lettura con opencv del raster Bosco ' + sourceSiBosco.source())
-                return {}
-            opening = opening * (imgSiBosco != 0)
-        if sourceNoBosco is not None:
-            if sourceNoBosco.bandCount() != 1:
-                feedback.reportError('Troppe bande ('+
-                                     str(sourceNoBosco.bandCount())+') nel raster No-Bosco letto dal file' + sourceNoBosco.source())
-                return {}
-            imgNoBosco = cv.imread( sourceNoBosco.source(), cv.IMREAD_ANYDEPTH | cv.IMREAD_GRAYSCALE )  #cv.IMREAD_GRAYSCALE
-            if imgNoBosco is None:
-                feedback.reportError('Errore nella lettura con opencv del raster No-Bosco ' + sourceNoBosco.source())
-                return {}
-
-            opening = opening * (imgNoBosco == 0)
-
-        #opening[opening == 0] = np.NaN
-        provider.setEditable(True)
-        data = bytearray(bytes(opening))
-        block.setData(data)
-        block.setNoDataValue(0)
-        writeok = provider.writeBlock(block, 1)
-        if writeok:
-            feedback.setProgressText("Successo nella scrittura del dato")
-        else:
-            feedback.setProgressText("Non sono riuscito a scrivere il blocco raster")
-            return {}
-
-        provider.setEditable(False)
-
-        out_rlayer = QgsRasterLayer(temppathfile, "Area Foresta hTrees="+
-                                    str(parameters['altezza_alberochioma_m']) +
-                                    " k="+str(int(ksize)) )
-
-        mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/style.qml")
-        if success is False:
-            feedback.setProgressText( mess + " - " + dirname+"/extra/style.qml")
-        else:
-            feedback.setProgressText( mess)
-
-        QgsProject.instance().addMapLayer(out_rlayer)
-        #self.iface.mapCanvas().refresh()
-
-        feedback.setProgressText(tempRasterLayer.source())
-
-
-        stop = datetime.now()
-        feedback.setProgressText("Tempo di elaborazione: " + str(stop-start))
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        #return {self.OUTPUT: temppathfile}
         return results
     def name(self):
         """
@@ -404,7 +306,7 @@ class CoRegister(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'CHM => Bosco'
+        return 'CHM => Co-Registra'
 
     def displayName(self):
         """
