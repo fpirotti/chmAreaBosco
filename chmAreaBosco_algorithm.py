@@ -237,8 +237,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         self.setProgressText(feedback, "Min area  (m2)" + str(minArea))
         self.setProgressText(feedback, "Min area  (pixels)" + str(minAreaPixels))
 
-        # pipe = QgsRasterPipe()
-        # sdp = source.dataProvider()
         if source.bandCount() != 1:
             feedback.reportError('Il raster CHM deve avere solamente una banda - il file ' +
                                  str(source.source()) + ' ha ' + str(source.bandCount()) + ' bande!'
