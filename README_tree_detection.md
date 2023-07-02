@@ -6,7 +6,7 @@
 
 The plugin process *CHM => Single Tree Detection* applies latest methods to detect tree 
 top position. 
-
+ 
 It is optimized for speed with a simple initial procedure that seeds
 using local maxima with a small kernel, and then removes false positives with 
 successive iterations. The rationale is simply that a small kernel is much faster 
