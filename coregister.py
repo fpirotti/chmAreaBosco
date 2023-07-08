@@ -137,8 +137,13 @@ class CoRegister(QgsProcessingAlgorithm):
         y1 = 0
         if isinstance(dataProvider, QgsRasterDataProvider):
             ext = QgsRectangle(dataProvider.extent())
-            x1 = ext.xMinimum() + (x * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize()))
-            y1 = ext.yMaximum() - (y * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
+
+            x1 = ext.xMinimum() + \
+                 (float(x) * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize())) + \
+                 dataProvider.xSize()/2.0
+            y1 = ext.yMaximum() - \
+                 (float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())) - \
+                 dataProvider.ySize()/2.0
             if verbose:
                 print( str(x) + ' - ' + str(x1)   )
 

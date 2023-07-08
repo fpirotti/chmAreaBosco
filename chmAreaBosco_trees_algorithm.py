@@ -77,7 +77,10 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
     TREEPOINTS = 'treepoints'
+    TREECANOPY = 'treecanopy'
+    KERNELOUTPUT = 'kerneloutput'
     THRESHOLD = 'similarityThreshold'
+    THRESHOLDTREEHEIGHT = 'altezza_alberochioma_m'
     # PERC_COVER = 'PERC_COVER'
     # MIN_AREA = 'MIN_AREA'
     # MIN_LARGH = 'MIN_LARGH'
@@ -99,7 +102,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterNumber(
-                'altezza_alberochioma_m',
+                self.THRESHOLDTREEHEIGHT,
                 self.tr('Soglia altezza chioma (m)'),
                 defaultValue=2.0
             )
@@ -112,12 +115,19 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 type=QgsProcessingParameterNumber.Double,
                 maxValue=1.0,
                 minValue=0.0,
-                defaultValue=0.9
+                defaultValue=0.75
             )
         )
-        self.addParameter(QgsProcessingParameterVectorDestination('Aree chiome', 'poligono', type=QgsProcessing.TypeVectorPolygon, createByDefault=True, defaultValue=None))
-        self.addParameter(QgsProcessingParameterFeatureSink('Posizione alberi', self.TREEPOINTS, type=QgsProcessing.TypeVectorPoint, createByDefault=True, defaultValue=None))
-
+        self.addParameter(QgsProcessingParameterVectorDestination(self.TREECANOPY, 'Aree chiome', type=QgsProcessing.TypeVectorPolygon, createByDefault=True, defaultValue=None))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.TREEPOINTS, 'Posizione alberi',  type=QgsProcessing.TypeVectorPoint, createByDefault=True, defaultValue=None))
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                self.KERNELOUTPUT,
+                self.tr('Raster Normalized Convoluted Kernel'),
+                createByDefault=True,
+                optional=True,
+            )
+        )
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -129,8 +139,11 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         source = self.parameterAsRasterLayer(parameters, self.INPUT, context)
         outputTreePoints = self.parameterAsVectorLayer(parameters, self.TREEPOINTS, context)
         threshold = parameters[self.THRESHOLD]
+        thresholdHchioma = parameters[self.THRESHOLDTREEHEIGHT]
         areaPixel = source.rasterUnitsPerPixelX()*source.rasterUnitsPerPixelX()
         feedback.setProgressText("Preparo il raster in output")
+        rasterfile = self.parameterAsFileOutput(parameters, self.KERNELOUTPUT, context)
+
 
         if source.bandCount() != 1:
             feedback.reportError('Il raster CHM deve avere solamente una banda - il file ' +
@@ -139,10 +152,18 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         feedback.setProgressText("Leggo il raster")
+        fileformat = "GTiff"
+
+        try:
+            driver = gdal.GetDriverByName(fileformat)
+        except:
+            feedback.reportError('Non sono riuscito a leggere  o creare il raster CHM ' +
+                                 gdal.GetLastErrorMsg() )
+
         try:
             ds = gdal.Open(str(source.source()))
         except:
-            feedback.reportError('Non sono riuscito a leggere il raster CHM ' +
+            feedback.reportError('Non sono riuscito a leggere  il raster CHM ' +
                                  gdal.GetLastErrorMsg() )
             return {}
 
@@ -152,10 +173,10 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
             return {}
 
+        img = img.astype('f4')
+        img[ img < thresholdHchioma ] = .0
         feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
 
-
-        # Check for cancelation
         if feedback.isCanceled():
             return {}
         feedback.setProgressText("Dimensione immagine: " + ' x '.join(map(str, img.shape)))
@@ -164,25 +185,60 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("Kernel size must be odd / vuole un valore dispari la dimensione "
                                  "della finestra di template.")
             return {}
-        template = np.zeros((ksize, ksize))
+        template = np.zeros((ksize, ksize), dtype='f4')
         mid = int((ksize-1)/2)
-        template[ mid, mid ] = 1
-        template = (cv.GaussianBlur(template, (ksize-2, ksize-2), 0) * 255)
+        template[ 0,  ] = [ 0.4, 0.5, 0.6, 0.5, 0.4 ]
+        template[ 1,  ] = [ 0.5, 0.7, 0.8, 0.7, 0.5 ]
+        template[ 2,  ] = [ 0.6, 0.8, 1.0, 0.8, 0.6 ]
+        template[ 3,  ] = [ 0.5, 0.7, 0.8, 0.7, 0.5 ]
+        template[ 4,  ] = [ 0.4, 0.5, 0.6, 0.5, 0.4 ]
+        template = (template * 100).astype('B')
+        #template = (cv.GaussianBlur(template, (ksize-2, ksize-2), 0) * 255)
 
-        cv.imwrite("template.jpg", template)
-        template = cv.imread("template.jpg", cv.IMREAD_GRAYSCALE)
-        res = cv.matchTemplate(img.astype('B'), template , cv.TM_CCOEFF_NORMED)
+        methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
+                   'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
+        res = cv.matchTemplate(img.astype('B'), template.astype('B'), cv.TM_CCOEFF_NORMED )
+        #kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
+
+        if feedback.isCanceled():
+            return {}
+
         dst = cv.copyMakeBorder(res, mid, mid, mid, mid,
                                 cv.BORDER_CONSTANT, None, 0)
 
-        #cv.imwrite("templateres.jpg", dst*255)
-        loc = np.where(dst >= threshold)
-        loct = loc + (img[loc], dst[loc])
+        # cv.imwrite("AAAAAtemplate.jpg", (dst * 255).astype('B'))
 
-        outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
+        feedback.setProgressText("Writing tree top probability raster")
+        if feedback.isCanceled():
+            return {}
 
-        QgsProject.instance().addMapLayer(outputTreePoints)
+        if rasterfile:
+            try:
+                dst_ds = driver.CreateCopy(rasterfile, ds, strict=0)
+                dst_ds.GetRasterBand(1).WriteArray(dst)
+            except:
+                feedback.reportError("Non sono riuscito a scrivere su file " +
+                                         rasterfile )
+                return  {}
 
+            out_rlayer = QgsRasterLayer(rasterfile, "Tree top probability map")
+            mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/styleCNNprob.qml")
+            if success is False:
+                feedback.reportError( mess + " - " + dirname+"/extra/styleCNNprob.qml")
+            QgsProject.instance().addMapLayer(out_rlayer)
+
+        if outputTreePoints:
+            loc = np.where(dst >= threshold)
+            loct = loc + (img[loc], dst[loc])
+            outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
+            if outputTreePoints is None:
+                feedback.setProgressText("Interrotto dall'utente")
+                return {}
+
+            QgsProject.instance().addMapLayer(outputTreePoints)
+
+        ds = None
+        dst_ds = None
         return results
     
 
@@ -190,7 +246,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         """Create points for testing"""
 
         srcCRS = sdp.crs()
-        point_layer = QgsVectorLayer('Point?crs=EPSG:4326', 'keypoints', 'memory')
+        point_layer = QgsVectorLayer('Point?crs=EPSG:4326', 'Tree top positions', 'memory')
         point_layer.setCrs(srcCRS)
         point_provider = point_layer.dataProvider()
         point_provider.addAttributes([QgsField('X', QVariant.Double)])
@@ -212,6 +268,8 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 if every > 100:
                     if cnt % every == 0:
                         feedback.setProgressText( str( round(cnt/len(points[0])*100) ) + "% ....")
+                        if feedback.isCanceled():
+                            return None
 
                 feat = QgsFeature(point_layer.fields())
                 x, y = self.local2src(pt[2], pt[3], sdp)
@@ -246,8 +304,14 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         y1 = float(0)
         if isinstance(dataProvider, QgsRasterDataProvider):
             ext = QgsRectangle(dataProvider.extent())
-            x1 = ext.xMinimum() + ( float(x) * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize()))
-            y1 = ext.yMaximum() - ( float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize()))
+
+            x1 = ext.xMinimum() + \
+                 (float(x) * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize())) + \
+                 ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize())/2.0
+            y1 = ext.yMaximum() - \
+                 (float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())) - \
+                 ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())/2.0
+
             if verbose:
                 print( str(x) + ' - ' + str(x1)   )
 
