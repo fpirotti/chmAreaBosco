@@ -195,6 +195,22 @@ class CoRegister(QgsProcessingAlgorithm):
         search_params = dict(checks = 50)
 
         flann = cv.FlannBasedMatcher(index_params, search_params)
+        # Create a feature matcher
+        #matcher = cv.BFMatcher()
+
+        # Match descriptors of the two images
+        #matches = matcher.match(des1, des2)
+        #matches = sorted(matches, key=lambda x: x.distance)
+        #good_matches = matches[:50]  # Adjust the number of matches based on your needs
+
+        # Extract matched keypoints
+        #src_pts = np.float32([kps1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        #dst_pts = np.float32([kps2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        # Estimate transformation matrix (homography) using RANSAC
+        #homography, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
+        #rotation = cv.RQDecomp3x3(homography[:3, :3])[0]
+        #translation = homography[:, 2]
 
         matches = flann.knnMatch(des1, des2, k=2)
 

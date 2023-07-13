@@ -118,14 +118,22 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 defaultValue=0.75
             )
         )
-        self.addParameter(QgsProcessingParameterVectorDestination(self.TREECANOPY, 'Aree chiome', type=QgsProcessing.TypeVectorPolygon, createByDefault=True, defaultValue=None))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.TREEPOINTS, 'Posizione alberi',  type=QgsProcessing.TypeVectorPoint, createByDefault=True, defaultValue=None))
+        self.addParameter(QgsProcessingParameterVectorDestination(self.TREECANOPY, 'Aree chiome',
+                                                                  type=QgsProcessing.TypeVectorPolygon,
+                                                                  createByDefault=True,
+                                                                  optional=True,
+                                                                  defaultValue=None))
+
+        self.addParameter(QgsProcessingParameterFeatureSink(self.TREEPOINTS, 'Posizione alberi',
+                                                            type=QgsProcessing.TypeVectorPoint,
+                                                            optional=False,
+                                                            createByDefault=True, defaultValue=None))
         self.addParameter(
             QgsProcessingParameterRasterDestination(
                 self.KERNELOUTPUT,
                 self.tr('Raster Normalized Convoluted Kernel'),
                 createByDefault=True,
-                optional=True,
+                optional=True
             )
         )
     def processAlgorithm(self, parameters, context, feedback):
@@ -175,6 +183,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
 
         img = img.astype('f4')
         img[ img < thresholdHchioma ] = .0
+        normalized_image = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX)
         feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
 
         if feedback.isCanceled():
@@ -197,7 +206,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
 
         methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
                    'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED']
-        res = cv.matchTemplate(img.astype('B'), template.astype('B'), cv.TM_CCOEFF_NORMED )
+        res = cv.matchTemplate(normalized_image.astype('B'), template.astype('B'), cv.TM_CCOEFF_NORMED )
         #kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
 
         if feedback.isCanceled():
@@ -214,12 +223,13 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
 
         if rasterfile:
             try:
-                dst_ds = driver.CreateCopy(rasterfile, ds, strict=0)
+                dst_ds = driver.CreateCopy(rasterfile, ds, strict=1)
                 dst_ds.GetRasterBand(1).WriteArray(dst)
+                dst_ds = None
             except:
                 feedback.reportError("Non sono riuscito a scrivere su file " +
                                          rasterfile )
-                return  {}
+                return {}
 
             out_rlayer = QgsRasterLayer(rasterfile, "Tree top probability map")
             mess, success = out_rlayer.loadNamedStyle(dirname+"/extra/styleCNNprob.qml")
@@ -227,18 +237,48 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError( mess + " - " + dirname+"/extra/styleCNNprob.qml")
             QgsProject.instance().addMapLayer(out_rlayer)
 
-        if outputTreePoints:
-            loc = np.where(dst >= threshold)
-            loct = loc + (img[loc], dst[loc])
-            outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
-            if outputTreePoints is None:
-                feedback.setProgressText("Interrotto dall'utente")
-                return {}
-
-            QgsProject.instance().addMapLayer(outputTreePoints)
-
         ds = None
-        dst_ds = None
+        loc = np.where(dst >= threshold)
+        loct = loc + (img[loc], dst[loc])
+        outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
+        if outputTreePoints is None:
+            feedback.setProgressText("Interrotto dall'utente")
+            return {}
+
+
+
+        # Setup SimpleBlobDetector parameters.
+        params = cv.SimpleBlobDetector_Params()
+
+        # Change thresholds
+        params.minThreshold = 5
+        params.maxThreshold = 50
+
+        # Filter by Area.
+        # params.filterByArea = True
+        # params.minArea = 1500
+        # Filter by Circularity
+        params.filterByCircularity = True
+        params.minCircularity = 0.1
+        # Filter by Convexity
+        params.filterByConvexity = True
+        params.minConvexity = 0.87
+        # Filter by Inertia
+        params.filterByInertia = True
+        params.minInertiaRatio = 0.01
+
+        detector = cv.SimpleBlobDetector_create(params)
+        keypoints = detector.detect(normalized_image.astype('B'))
+        print(len(keypoints))
+        self._add_points_blob(keypoints, outputTreePoints, source.dataProvider(), feedback)
+       # point_provider = outputTreePoints.dataProvider()
+
+
+        QgsProject.instance().addMapLayer(outputTreePoints)
+        if outputTreePoints is None:
+            feedback.setProgressText("Interrotto dall'utente")
+            return {}
+
         return results
     
 
@@ -253,8 +293,9 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         point_provider.addAttributes([QgsField('Y', QVariant.Double)])
         point_provider.addAttributes([QgsField('Similarity', QVariant.Double)])
         point_provider.addAttributes([QgsField('TreeHeight', QVariant.Double)])
+        point_provider.addAttributes([QgsField('Algo', QVariant.String)])
         #point_provider.addAttributes([QgsField('sizeX', QVariant.Double)])
-        caps = point_layer.dataProvider().capabilities()
+        caps = point_provider.capabilities()
         if caps & QgsVectorDataProvider.AddFeatures:
             point_layer.startEditing()
             feedback.setProgressText("Salvo: " + str(len(points[0])) + " posizione alberi.")
@@ -267,13 +308,15 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 cnt += 1
                 if every > 100:
                     if cnt % every == 0:
-                        feedback.setProgressText( str( round(cnt/len(points[0])*100) ) + "% ....")
+                        feedback.setProgress(int(cnt/len(points[0])*100))
                         if feedback.isCanceled():
                             return None
+                    if cnt % (every*10) == 0:
+                        feedback.setProgressText(str(round(cnt/len(points[0])*100)) + "% ....")
 
                 feat = QgsFeature(point_layer.fields())
                 x, y = self.local2src(pt[2], pt[3], sdp)
-                feat.setAttributes([x, y, float(pt[0]), float(pt[1])])
+                feat.setAttributes([x, y, float(pt[0]), float(pt[1]), 'CC'])
 
                 geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
                 feat.setGeometry(geom)
@@ -299,6 +342,64 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
 
         return point_layer
 
+
+    def _add_points_blob(self, keypoints, point_layer, sdp, feedback):
+        """Create points for testing"""
+
+        point_provider = point_layer.dataProvider()
+        caps = point_provider.capabilities()
+        if caps & QgsVectorDataProvider.AddFeatures:
+            point_layer.startEditing()
+            feedback.setProgressText("Salvo: " + str(len(keypoints)) + " posizione alberi.")
+            cnt = 0
+
+            every = int(len(keypoints)/100)
+            #for pt in zz:
+            for kp in keypoints:
+                cnt += 1
+                if every > 100:
+                    if cnt % every == 0:
+                        feedback.setProgress(int(cnt/len(keypoints)*100))
+                        if feedback.isCanceled():
+                            return None
+                    if cnt % (every*10) == 0:
+                        feedback.setProgressText(str(round(cnt/len(keypoints)*100)) + "% ....")
+
+                feat = QgsFeature(point_layer.fields())
+                xl = int(kp.pt[0])  # x-coordinate of the keypoint
+                yl = int(kp.pt[1])  # y-coordinate of the keypoint
+                size = int(kp.size)  # size of the keypoint
+                response = kp.response  # response of the keypoint
+                x, y = self.local2src(xl, yl, sdp)
+                feat.setAttributes([x, y, float(size), float(response), 'Bl'])
+
+                geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
+                feat.setGeometry(geom)
+                b = point_layer.addFeature(feat)
+
+                if not b:
+                    print("Error adding feature")
+                    print(point_layer.lastError())
+                    feedback.reportError(point_layer.lastError())
+                    feedback.reportError(point_layer.isValid())
+                    break
+            commErr = point_layer.commitChanges()
+            if not commErr:
+                print("Error committing feature")
+                print(point_layer.lastError())
+                feedback.reportError(point_layer.lastError())
+                print(point_layer.commitErrors())
+                feedback.reportError(point_layer.commitErrors())
+
+            print("------------tot features")
+            print(point_layer.featureCount())
+
+        else:
+            print("Error")
+            return {}
+
+        return point_layer
+
     def local2src(self, x, y, dataProvider, verbose=False ):
         x1 = float(0)
         y1 = float(0)
@@ -311,6 +412,10 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             y1 = ext.yMaximum() - \
                  (float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())) - \
                  ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())/2.0
+        else:
+            print("Error no data provider of raster type provided")
+            return None
+
 
             if verbose:
                 print( str(x) + ' - ' + str(x1)   )
