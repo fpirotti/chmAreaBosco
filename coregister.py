@@ -132,24 +132,19 @@ class CoRegister(QgsProcessingAlgorithm):
             feedback.setProgressText("Time passed: " + str(self.timeDiff) )
         self.totTime += self.timeDiff.total_seconds()
         self.timePre = datetime.now()
-    def local2src(self, x, y, dataProvider, verbose=False ):
+    def local2src(self, x, y, dataProvider, ext, xres, yres, verbose=False ):
         x1 = 0
         y1 = 0
         if isinstance(dataProvider, QgsRasterDataProvider):
-            ext = QgsRectangle(dataProvider.extent())
 
-            x1 = ext.xMinimum() + \
-                 (float(x) * ((ext.xMaximum()-ext.xMinimum())/dataProvider.xSize())) + \
-                 dataProvider.xSize()/2.0
-            y1 = ext.yMaximum() - \
-                 (float(y) * ((ext.yMaximum()-ext.yMinimum())/dataProvider.ySize())) - \
-                 dataProvider.ySize()/2.0
+            x1 = ext.xMinimum() + float(x) * xres + xres/2.0
+            y1 = ext.yMaximum() - float(y) * yres - yres/2.0
             if verbose:
                 print( str(x) + ' - ' + str(x1)   )
 
         return x1, y1
 
-    def _create_points(self, kp1, sdp):
+    def _create_points(self, kp1, sdp, feedback ):
         """Create points for testing"""
 
         srcCRS = sdp.crs()
@@ -172,9 +167,24 @@ class CoRegister(QgsProcessingAlgorithm):
         caps = point_layer.dataProvider().capabilities()
         if caps & QgsVectorDataProvider.AddFeatures:
             point_layer.startEditing()
+            ext = QgsRectangle(sdp.extent())
+            xres= (ext.xMaximum() - ext.xMinimum()) / sdp.xSize()
+            yres= (ext.yMaximum() - ext.yMinimum()) / sdp.ySize()
+            cnt = 0
+
+            every = int(len(kp1)/100)
             for i, kp in enumerate(kp1):
+                cnt += 1
+                if every > 100:
+                    if cnt % every == 0:
+                        feedback.setProgress(int(cnt/len(kp1)*100))
+                        if feedback.isCanceled():
+                            return None
+                    if cnt % (every*10) == 0:
+                        feedback.setProgressText(str(round(cnt/len(kp1)*100)) + "% ....")
+
                 feat = QgsFeature(point_layer.fields())
-                x, y = self.local2src(kp.pt[0], kp.pt[1], sdp)
+                x, y = self.local2src(kp.pt[0], kp.pt[1], sdp, ext, xres, yres)
                 feat.setAttributes([x, y, kp.size, kp.angle, kp.response, kp.octave])
 
                 geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
@@ -303,10 +313,10 @@ class CoRegister(QgsProcessingAlgorithm):
         # Initiate ORB detector
         orb = cv.ORB_create()
         sift = cv.SIFT_create()
-        feedback.setProgressText("Preparing SIFT")
+        feedback.setProgressText("Preparing SIFT... might take time for large images (e.g. 40 s on a 4000 x 5000 pixel image)")
         kps, des = sift.detectAndCompute(img8bit, None)
         self.getTimePassed(feedback, "SIFT with " + str(len(kps)) + " points")
-        outputKeyPoints = self._create_points(kps, source.dataProvider())
+        outputKeyPoints = self._create_points(kps, source.dataProvider(), feedback)
         QgsProject.instance().addMapLayer(outputKeyPoints)
         # find the keypoints with ORB
         kp = orb.detect(img8bit, None)

@@ -115,7 +115,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
                 type=QgsProcessingParameterNumber.Double,
                 maxValue=1.0,
                 minValue=0.0,
-                defaultValue=0.75
+                defaultValue=0.70
             )
         )
         self.addParameter(QgsProcessingParameterVectorDestination(self.TREECANOPY, 'Aree chiome',
@@ -221,6 +221,18 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+        feedback.setProgressText("Dilation...")
+        dilated = cv.dilate(dst, kernel)
+        if feedback.isCanceled():
+            return {}
+
+        feedback.setProgressText("Masking...")
+        mask = cv.compare(dst, dilated, cv.CMP_EQ)
+        if feedback.isCanceled():
+            return {}
+
+
         if rasterfile:
             try:
                 dst_ds = driver.CreateCopy(rasterfile, ds, strict=1)
@@ -238,9 +250,11 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             QgsProject.instance().addMapLayer(out_rlayer)
 
         ds = None
-        loc = np.where(dst >= threshold)
+        feedback.setProgressText("Threshold " + str(threshold))
+        loc = np.asarray( (dst >= threshold)*mask ).nonzero()
+        #loc = np.where(dst >= threshold)
         loct = loc + (img[loc], dst[loc])
-        outputTreePoints = self._create_points(loct, source.dataProvider(), feedback)
+        outputTreePoints = self.create_points(loct, source.dataProvider(), feedback)
         if outputTreePoints is None:
             feedback.setProgressText("Interrotto dall'utente")
             return {}
@@ -282,7 +296,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         return results
     
 
-    def _create_points(self, points, sdp, feedback):
+    def create_points(self, points, sdp, feedback):
         """Create points for testing"""
 
         srcCRS = sdp.crs()
@@ -353,6 +367,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgressText("Salvo: " + str(len(keypoints)) + " posizione alberi.")
             cnt = 0
 
+            ext = QgsRectangle(sdp.extent())
             every = int(len(keypoints)/100)
             #for pt in zz:
             for kp in keypoints:

@@ -3,7 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/chm_to_forest.iml" filepath="$PROJECT_DIR$/.idea/chm_to_forest.iml" />
-      <module fileurl="file://$USER_HOME$/PycharmProjects/sifet/.idea/sifet.iml" filepath="$USER_HOME$/PycharmProjects/sifet/.idea/sifet.iml" />
     </modules>
   </component>
 </project>
