@@ -181,9 +181,11 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('Errore nella lettura con opencv del CHM ' + source.source())
             return {}
 
-        img = img.astype('f4')
-        img[ img < thresholdHchioma ] = .0
-        normalized_image = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX)
+        #img.astype('f4')
+        normalized_imageOriginal = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX)
+        img2 = img.astype('f4')
+        img2[ img2 < thresholdHchioma ] = .0
+        normalized_image = cv.normalize(img2, None, 0, 255, cv.NORM_MINMAX)
         feedback.setProgressText("Letto raster di dimensioni "+ str(img.shape))
 
         if feedback.isCanceled():
@@ -251,9 +253,9 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
 
         ds = None
         feedback.setProgressText("Threshold " + str(threshold))
-        loc = np.asarray( (dst >= threshold)*mask ).nonzero()
+        loc = np.asarray( (img2 > thresholdHchioma)*(dst >= threshold)*mask ).nonzero()
         #loc = np.where(dst >= threshold)
-        loct = loc + (img[loc], dst[loc])
+        loct = loc + (img2[loc], dst[loc])
         outputTreePoints = self.create_points(loct, source.dataProvider(), feedback)
         if outputTreePoints is None:
             feedback.setProgressText("Interrotto dall'utente")
@@ -282,8 +284,9 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         params.minInertiaRatio = 0.01
 
         detector = cv.SimpleBlobDetector_create(params)
-        keypoints = detector.detect(normalized_image.astype('B'))
-        print(len(keypoints))
+        normalized_imageInv = (normalized_imageOriginal*-1)
+        keypoints = detector.detect(normalized_imageInv.astype('B'))
+
         self._add_points_blob(keypoints, outputTreePoints, source.dataProvider(), feedback)
        # point_provider = outputTreePoints.dataProvider()
 
@@ -312,7 +315,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         caps = point_provider.capabilities()
         if caps & QgsVectorDataProvider.AddFeatures:
             point_layer.startEditing()
-            feedback.setProgressText("Salvo: " + str(len(points[0])) + " posizione alberi.")
+            feedback.setProgressText("Salvo: " + str(len(points[0])) + " posizione alberi algoritmo cross correlation (CC).")
             cnt = 0
 
             every = int(len(points[0])/100)
@@ -364,7 +367,7 @@ class CHMtoTreesAlgorithm(QgsProcessingAlgorithm):
         caps = point_provider.capabilities()
         if caps & QgsVectorDataProvider.AddFeatures:
             point_layer.startEditing()
-            feedback.setProgressText("Salvo: " + str(len(keypoints)) + " posizione alberi.")
+            feedback.setProgressText("Salvo: " + str(len(keypoints)) + " posizione alberi algoritmo Blob (Bl).")
             cnt = 0
 
             ext = QgsRectangle(sdp.extent())
