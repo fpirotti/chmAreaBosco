@@ -349,18 +349,22 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         #file1.write("Bosco ID: area (m2)\n")
         #for i in range(len(contours)):
 
-        ptst = None
+        ptst =  None
+        values2rem = []
         for i in range(0, numLabels):
             #aa = int(cv.contourArea(contours[i])*areaPixel)
             aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
             if aa < minArea:
-                if ptst is None:
-                    ptst = labels == i
-                else:
-                    ptst = ptst | (labels == i)
+                values2rem.append(i)
+                #if ptst is None:
+                #    ptst = labels == i
+                #else:
+                #    ptst = ptst | (labels == i)
+
+        ptst = np.isin(labels, values2rem)
 
         stop = datetime.now()
-        feedback.setProgressText("Tempo di elaborazione collect components: " + str(stop-start))
+        feedback.setProgressText("Tempo di elaborazione collect YES bosco small components: " + str(stop-start))
         totTime += (stop - start).total_seconds()
         start = datetime.now()
 
@@ -396,17 +400,20 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         #file1.write("NON Bosco ID: area (m2)\n")
         #for i in range(len(contours)):
         ptst = None
+        values2rem = []
         for i in range(0, numLabels):
             #aa = int(cv.contourArea(contours[i])*areaPixel)
             aa = int( stats[i, cv.CC_STAT_AREA]*areaPixel)
             if aa < minArea:
-                if ptst is None:
-                    ptst = labels == i
-                else:
-                    ptst = ptst | (labels == i)
+                values2rem.append(i)
+                #if ptst is None:
+                #    ptst = labels == i
+                #else:
+                #    ptst = ptst | (labels == i)
 
+        ptst = np.isin(labels, values2rem)
         stop = datetime.now()
-        feedback.setProgressText("Tempo di elaborazione collect components: " + str(stop-start))
+        feedback.setProgressText("Tempo di elaborazione collect NO bosco small components: " + str(stop-start))
         totTime += (stop - start).total_seconds()
         start = datetime.now()
         #pts = (np.array(indexx, dtype='int64'), np.array(indexy, dtype='int64') )
