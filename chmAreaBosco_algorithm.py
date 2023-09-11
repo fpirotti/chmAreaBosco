@@ -362,7 +362,6 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 #    ptst = ptst | (labels == i)
 
         ptst = np.isin(labels, values2rem)
-
         stop = datetime.now()
         feedback.setProgressText("Tempo di elaborazione collect YES bosco small components: " + str(stop-start))
         totTime += (stop - start).total_seconds()

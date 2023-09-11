@@ -70,7 +70,7 @@ Premere il pulsante "installa" ed aspettare la fine dell'installazione.
 
 ![installa plugin](img/install.jpg)
 
-
+ 
 ## Benchmark
 
 Three CHM rasters with the following size have been tested. All CHMs 
