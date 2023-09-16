@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Francesco"
+  given-names: "Pirotti"
+  orcid: "https://orcid.org/0000-0002-4796-6406"  
+title: "CHM to Forest - QGIS plugin"
+version: 1.3.0
+doi: 10.5281/zenodo.1234
+date-released: 2023-07-18
+url: "https://github.com/fpirotti/chmAreaBosco"
