@@ -23,26 +23,46 @@ che consente elaborazioni ottimizzate su immagini raster.
 
 ### Input 
 
- - **Input CHM** - Un livello raster contenente il CHM ovvero un modello delle chiome. 
-Questo raster deve necessariamente essere accurato, 
+#### **Input CHM** 
+
+Un livello raster contenente il CHM ovvero un modello delle chiome. 
+Questo raster deve necessariamente essere **<u>accurato</U>**, 
 in quanto fornisce l'informazione di base per la 
-creazione dell'area a bosco.
- - **Input Maschera Pixel Bosco** - [Un raster binario BOSCO*](#mask) (pixel con valore 1 = pixel bosco) \[opzionale\]: 
+creazione dell'area a bosco. Eventuali errori del CHM possono essere 
+parzialmente corretti usando come input delle maschere come in seguito
+descritto.
+
+#### **Input Maschera Pixel Bosco** 
+
+[Un raster binario BOSCO*](#mask) (pixel con valore 1 = pixel bosco) \[opzionale\]: 
 il valore 1 del pixel di questo raster verrà considerato bosco a prescindere 
 dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione bosco. [vedi schema in immagine 1](#mask)
- -  **Input Maschera Pixel Non Bosco**  - [Un raster binario NON BOSCO*](#mask) (pixel con valore 1 = pixel NON bosco) \[opzionale\]: 
+
+#### **Input Maschera Pixel Non Bosco**  
+
+[Un raster binario NON BOSCO*](#mask) (pixel con valore 1 = pixel NON bosco) \[opzionale\]: 
 il valore 1 del pixel di questo raster verrà considerato non bosco a prescindere 
 dal risultato del plugin, ovvero questa informazione avrà priorità
 nella definizione di aree da escludere dall'area bosco. [vedi schema in immagine 1](#mask)
-- **Soglia altezza chioma (m)** - l'altezza della chioma minima per definire il pixel
+
+#### **Soglia altezza chioma (m)** 
+
+l'altezza della chioma minima per definire il pixel
 come appartenente ad un albero.
-- **Densità copertura (%)** - La proporzione minima coperta da chioma perchè l'area venga inclusa
+
+#### **Densità copertura (%)** 
+
+La proporzione minima coperta da chioma perchè l'area venga inclusa
 come bosco.
-- **Area minima (m2)** - L'area minima per definire un'area a bosco.
-- **Larghezza minima (m)** - L'area minima per definire un'area a bosco.
 
+#### **Area minima (m2)** 
 
+L'area minima per definire un'area a bosco.
+
+#### **Larghezza minima (m)** 
+
+L'area minima per definire un'area a bosco.
 
 
 ### Output
@@ -52,8 +72,11 @@ di essi o nessuno dei due. Il raster viene creato in maniera predefinita,
 mentre il vettoriale no, deve essere l'utente che sceglie di crearlo. Entrambi possono
 essere creati come file temporanei o meno.
 
-- **Area Bosco Raster** - \[opzionale\] - Il raster con l'area a bosco.
-- **Area Bosco Vettoriale** - \[opzionale\] - Il file vettoriale delle aree a bosco, 
+#### **Area Bosco Raster** 
+[opzionale] - Il raster con l'area a bosco.
+
+#### **Area Bosco Vettoriale** 
+[opzionale] - Il file vettoriale delle aree a bosco, 
 tematizzato e con una colonna "area_ha" con  l'area in ettari.
 
 
