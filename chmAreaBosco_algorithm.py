@@ -107,18 +107,18 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
-            QgsProcessingParameterRasterLayer(
-                self.INPUT_SIBOSCO,
-                self.tr('Input Maschera Pixel Bosco'),
-                optional=True, defaultValue=None
-            )
-        )
-
-        self.addParameter(
             QgsProcessingParameterBoolean(
                 self.VERBOSE,
                 self.tr('Output verboso'),
                 defaultValue=True
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.INPUT_SIBOSCO,
+                self.tr('Input Maschera Pixel Bosco'),
+                optional=True, defaultValue=None
             )
         )
 
@@ -212,6 +212,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
         # ret, markers = cv.connectedComponents(sure_fg)
         # https://docs.opencv.org/4.x/d3/db4/tutorial_py_watershed.html
         ksize  = parameters['larghezza_minima_m']
+        rasterResolutionAvg = math.sqrt(source.rasterUnitsPerPixelX().__pow__(2)+source.rasterUnitsPerPixelY().__pow__(2))
         ksizePixels = ksize / source.rasterUnitsPerPixelX()
         minArea = parameters['area_minima_m2']
         minAreaPixels = parameters['area_minima_m2'] / (source.rasterUnitsPerPixelX() * source.rasterUnitsPerPixelX())
@@ -227,6 +228,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                                  )
             return {}
 
+        self.setProgressText(feedback, "risoluzione media pixel... " + str(rasterResolutionAvg))
         self.setProgressText(feedback, "Lato pixel... " + str(source.rasterUnitsPerPixelX()))
         self.setProgressText(feedback, "CRS... " + str(source.crs()))
         self.setProgressText(feedback, "NBande... " + str(source.bandCount()))
@@ -494,7 +496,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                     alg_params = {
                         'BAND_A': 1,
                         'BAND_B': 1,
-                        'EXTENT_OPT': 3,  # Intersect
+                        #'EXTENT_OPT': 3,  # Intersect
                         'EXTRA': '',
                         'FORMULA': 'A * (B == 1)',
                         'INPUT_A': source,
@@ -625,9 +627,20 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 return {}
 
-            self.setProgressText(feedback, "Eliminao il fid....")
+            self.setProgressText(feedback, "Eliminato il fid....")
             EliminaCampo = processing.run('native:deletecolumn', alg_params, context=context,
                                                      feedback=feedback, is_child_algorithm=True)
+
+            alg_params = {
+                'INPUT': EliminaCampo['OUTPUT'],
+                'TOLERANCE': rasterResolutionAvg*1.4,
+                'USE_Z_VALUE': False,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            lisciato = processing.run("native:removeduplicatevertices",  alg_params, context=context,
+                                                           feedback=feedback, is_child_algorithm=True)
+
 
             alg_params = {
                 'FIELD_LENGTH': 12,
@@ -635,7 +648,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
                 'FIELD_PRECISION': 3,
                 'FIELD_TYPE': 0,  # Decimale (doppia precisione)
                 'FORMULA': '$area/10000',
-                'INPUT': EliminaCampo['OUTPUT'],
+                'INPUT': lisciato['OUTPUT'],
                 'OUTPUT': temppathfile_v
             }
             if feedback.isCanceled():
