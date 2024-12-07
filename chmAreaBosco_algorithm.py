@@ -156,6 +156,7 @@ class CHMtoForestAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 'altezza_alberochioma_m',
                 self.tr('Soglia altezza chioma (m)'),
+                type=QgsProcessingParameterNumber.Double,
                 defaultValue=2.0
             )
         )
